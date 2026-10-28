@@ -1,6 +1,6 @@
-# web_weather : spécification (brouillon v0.1)
+# web_weather : spécification (v1.0)
 
-Statut : débat. Aucun code. Cette spec sera complétée par le document serveur fourni plus tard.
+Statut : version 1 construite (serveur, page, bancs, CI). Mode d'emploi : `README.md`. Partie serveur : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md` (section 5).
 
 ## 1. Objectif
 
@@ -12,13 +12,14 @@ Serveur Python + front HTML/CSS/JS, sans framework JS.
 **Open-Meteo est la seule source de données météo** (https://github.com/open-meteo/open-meteo).
 Conséquence : pas de radar, pas de Vigilance officielle, pas de capteurs de station, et pas d'impacts de foudre en direct dans Open-Meteo.
 Chaque écran de la capture est donc remplacé par un équivalent calculé à partir d'Open-Meteo (section 4).
-Exceptions : un fond de carte (tuiles) pour l'écran carte, à valider (voir questions ouvertes), la foudre en temps réel (section 2 bis, Blitzortung, en test) et le radar de pluie (section 2 ter, RainViewer, retenu).
+Exceptions : le fond de carte OpenStreetMap (section 4 bis), la foudre en temps réel (section 2 bis, Blitzortung, en test) et le radar de pluie (section 2 ter, RainViewer, retenu).
 
 ### 2 bis. Foudre en temps réel : source externe (Blitzortung, à confirmer)
 
 Open-Meteo n'a pas d'impacts réels (section 3). Source candidate pour la carte, le compteur et l'alerte d'approche : le flux websocket public de Blitzortung.org.
 - Protocole : se connecter à `wss://ws1.blitzortung.org/` (secours : ws7, ws8), envoyer `{"a":111}`, recevoir des trames JSON compressées en LZW. Non documenté officiellement ; décodage tiré de clients open source (par exemple simonsorcerer23/ft8-raspi).
 - Test du 2026-10-28 (25 s, une connexion) : 87 éclairs reçus (environ 204/min), 0 trame illisible, retard médian 5 s (1,6 à 22,7 s). Champs : `time` (ns), `lat`, `lon`, `alt`, `pol`, `mds`, `mcg`, `sig`, `region`, `status`, `delay`.
+- Client côté serveur : **websocket minimal écrit en bibliothèque standard** (socket + ssl + trames, décodage LZW), avec un banc d'essai sur des trames enregistrées. Pas de dépendance (règle « stdlib seule »).
 - Le flux est **mondial** : le serveur Python doit filtrer par zone (cadre autour de la position). Aucun éclair en France pendant le test (peut-être simplement pas d'orage à ce moment), donc la couverture France n'est pas démontrée.
 - Conditions (forums, anciennes et contradictoires) : usage non commercial, gratuit, source indiquée (données CC-BY-SA 4.0), données relayées depuis **notre serveur** et pas depuis le navigateur. À confirmer auprès de Blitzortung.
 - Risque : service non garanti, protocole non documenté, il peut changer.
@@ -75,10 +76,38 @@ Modèles : `best_match` par défaut, AROME/ARPEGE (France), ICON, IFS, GFS au ch
 | Vigilance | Niveaux **indicatifs** calculés par nos seuils. Ce n'est pas la vigilance officielle |
 | Autre | Réglages : lieu, unités, modèle, seuils |
 
-## 5. Serveur Python (à compléter)
+## 4 bis. Score de risque et alertes « Surveillance »
 
-Rôle proposé : proxy et cache vers Open-Meteo, calcul du score et des alertes, service des fichiers statiques.
-Choix du framework, lancement et hébergement : **en attente du document de spec fourni par l'utilisateur**.
+Heuristiques (pas un modèle validé), à afficher comme telles, seuils réglables dans « Autre ».
+- Score 0-100, par heure. `clamp(x) = min(max(x, 0), 1)`.
+  - Sans LPI (hors domaine ICON-D2) : CAPE `45·clamp(cape/2000)` + LI `25·clamp(-li/6)` + pluie `20·pop/100` + rafales `10·clamp((rafale-40)/60)`.
+  - Avec LPI : CAPE 36 + LI 20 + pluie 16 + rafales 8 + LPI `20·clamp(lpi/5)` (5 J/kg = plein, à calibrer).
+  - Si CIN > 150 J/kg : la part convective (CAPE + LI) est multipliée par 0,6.
+  - Niveaux : < 25 Faible, < 50 Modéré, < 75 Élevé, sinon Très élevé.
+- Fenêtres d'alerte (heures consécutives) : « Orage probable » si CAPE ≥ 500 et LI ≤ -1 ; « Rafales fortes » si rafales ≥ 60 km/h ; « Foudre probable » si LPI ≥ 2 J/kg (seulement là où le LPI existe).
+- Pessac est en bord de domaine ICON-D2 (Bordeaux 24/24 au test) : tester le point exact, et repasser à la formule sans LPI si l'appel échoue.
+
+## 4 ter. Carte CAPE
+
+Grille 15×15 sur environ 150 km autour du lieu (pas d'environ 10 km), mise à jour toutes les heures : 225 × 24 = 5 400 appels/jour sur 10 000. Un seul appel multi-coordonnées par mise à jour (225 points, sous la limite de 500). Cache serveur obligatoire, partagé par tous les clients.
+
+## 4 quater. Fond de carte
+
+Tuiles OpenStreetMap, **relayées et cachées par notre serveur** (User-Agent identifiable, attribution « © OpenStreetMap contributors »), assombries côté page par un filtre CSS (invert + hue-rotate) appliqué au seul calque de fond. Esri et CARTO sont écartés.
+
+## 5. Serveur Python
+
+Référence : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md`, appliqué tel quel :
+- Bibliothèque standard Python seule (`http.server`, `ThreadingTCPServer`), `serveur.py` avec les options standard (`--port`, `--local`, `--sans-navigateur`, `--sans-pause`, `--sans-maj`).
+- `appairage.py` copié de `web_suite/lanceur/appairage.py` sans modification (jeton, code d'appairage, HTTPS).
+- Fichiers statiques par liste blanche (regex), aucun CORS ouvert, mise à jour automatique git, intégration web_launcher (entrée `outils.json`), banc `test/banc-serveur.py` et CI.
+- Port : 8792 proposé (premier libre de la plage 8790-8899 d'après les règles, à confirmer dans le catalogue du launcher).
+- Rôle : **toutes les sources externes passent par le serveur**, le navigateur ne parle qu'à lui (plus de CORS ni de CSP à ouvrir) :
+  - proxy et cache Open-Meteo (point du lieu, LPI `icon_d2` séparé, grille CAPE horaire) ;
+  - relais et cache des tuiles RainViewer et OpenStreetMap ;
+  - connexion websocket Blitzortung, filtrage par zone, impacts récents servis à la page ;
+  - le score, les alertes et la Vigilance se calculent **dans la page** (`js/calc.js`), car les seuils sont des réglages de chaque appareil.
+- Pas de route qui écrit : aucune donnée côté serveur, hors cache. Réglages dans le navigateur.
 
 ## 6. Contraintes
 
@@ -92,12 +121,20 @@ Choix du framework, lancement et hébergement : **en attente du document de spec
 - Périmètre : tous les écrans de la capture (accueil et alertes, Chasse orage, Station, Vigilance, Autre), avec Open-Meteo comme source météo.
 - Foudre : l'utilisateur veut les impacts réels en temps réel. Il veut les trois usages : points sur la carte, compteur et distance, alerte d'approche. Source retenue pour test : Blitzortung (section 2 bis).
 - Radar : RainViewer retenu (section 2 ter). Vigilance officielle : pas de source ajoutée.
-- Serveur Python : le document de spec arrive plus tard.
-- Débat et spec d'abord. Une maquette jetable existe dans `maquette/` (lieu : Pessac 33, HTML/CSS/JS, Leaflet) : météo Open-Meteo et radar RainViewer réels, impacts de foudre **simulés**, fond de carte Esri « Dark Gray » (CARTO sombre testé puis écarté : filigrane « API key required », il exige maintenant une clé). Elle appelle les API directement depuis le navigateur ; le vrai produit passera par le serveur Python.
+- Fond de carte : OpenStreetMap relayé par le serveur, assombri en CSS (section 4 quater).
+- Grille CAPE : 15×15, ~150 km, horaire (section 4 ter).
+- Score : heuristique de la maquette, plus le LPI à 20 points quand il existe, plus l'alerte « Foudre probable » (section 4 bis).
+- Interface : français uniquement, °C, km/h, mm, mobile d'abord (le bureau s'adapte simplement).
+- Serveur : `REGLES-NOUVEAU-WEB-TOOL.md`, client websocket Blitzortung en stdlib (section 5).
+- Écrans finaux : Accueil (avec brief), Chasse orage (radar, foudre, cellules, grille CAPE), Données (station, graphiques, modèles, fiabilité), Vigilance indicative, Réglages.
+- Vigilance indicative : jaune / orange / rouge à 25 / 50 / 75 % de score d'orage, 70 / 90 / 110 km/h de rafales, 20 / 40 / 80 mm de pluie par jour.
+- Historique : une maquette jetable a existé dans `maquette/` (supprimée en v1, voir l'historique git) (lieu : Pessac 33, HTML/CSS/JS, Leaflet) : météo Open-Meteo et radar RainViewer réels, impacts de foudre **simulés**, fond de carte Esri « Dark Gray » (CARTO sombre testé puis écarté : filigrane « API key required », il exige maintenant une clé). Elle appelle les API directement depuis le navigateur ; le vrai produit passera par le serveur Python.
 
 ## 8. Non vérifié
 
-- Conditions d'usage du service de tuiles Esri « Dark Gray » (recherche non concluante) ; état « legacy » du service.
+- Politique d'usage des tuiles OpenStreetMap (tile.openstreetmap.org) : à relire avant la mise en production (cache, User-Agent, volume).
+- Seuils LPI (5 J/kg plein score, 2 J/kg alerte) : choisis sans calibration.
+- Port 8792 libre dans le catalogue du launcher.
 - Limites actuelles de RainViewer, à confirmer avant la mise en production (zoom 7 annoncé, mais une tuile z8 a répondu 200 ; 100 requêtes/min non confirmé).
 - Licence et format exacts de l'API Paquet Radar de Météo-France (non testée).
 - Conditions d'usage actuelles de Blitzortung (forums anciens et contradictoires).
@@ -112,9 +149,4 @@ Choix du framework, lancement et hébergement : **en attente du document de spec
 
 ## 9. Questions ouvertes
 
-1. Fond de carte : la maquette utilise Esri « Dark Gray » (testé le 2026-10-28 : fonctionne sans clé, CORS ouvert). Mais la doc Esri le classe comme service historique (legacy), la version actuelle passe par une API avec clé, et je n'ai pas trouvé les conditions d'usage de ce point d'accès. À trancher : le garder après vérification des conditions Esri, OpenStreetMap (sa politique d'usage des tuiles est à lire, pas de thème sombre natif), ou un fournisseur avec clé gratuite. CARTO sombre est écarté (filigrane « API key required »).
-2. Taille de la grille de la carte (zone, nombre de points) selon le budget de requêtes.
-3. Formule exacte du score de risque et des seuils « Surveillance ».
-4. Langue : français uniquement ? Unités par défaut (km/h, °C, mm).
-5. Mobile d'abord (comme les captures) ou aussi bureau ?
-6. Framework serveur et hébergement (document à venir).
+Toutes les questions de la v0.1 sont tranchées (section 7). Restent les points non vérifiés de la section 8.
