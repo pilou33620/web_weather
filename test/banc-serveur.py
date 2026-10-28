@@ -23,10 +23,30 @@ maintenant = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=
 HEURES = [(maintenant + timedelta(hours=k)).strftime("%Y-%m-%dT%H:00") for k in range(-3, 45)]
 RADAR = {"host": "https://tiles.exemple", "radar": {"past": [{"time": 1793209800, "path": "/v2/radar/abc"}]}}
 PANNE = set()
+VIGI = {"product": {"periods": [{"echeance": "J", "begin_validity_time": "2026-10-28T06:00:00+00:00",
+        "end_validity_time": "2026-10-29T00:00:00+00:00", "text_items": {"text": ["Orages forts", "sur l'ouest."]},
+        "timelaps": {"domain_ids": [
+            {"domain_id": "33", "max_color_id": 3, "phenomenon_items": [
+                {"phenomenon_id": "3", "phenomenon_max_color_id": 3,
+                 "timelaps_items": [{"begin_time": "2026-10-28T16:00:00+00:00", "end_time": "2026-10-28T23:00:00+00:00", "color_id": 3}]},
+                {"phenomenon_id": "1", "phenomenon_max_color_id": 2, "timelaps_items": []}]},
+            {"domain_id": "75", "max_color_id": 1, "phenomenon_items": []}]}}]}}
 
 
-def faux_telecharger(url, max_octets=8 << 20):
+def faux_telecharger(url, max_octets=8 << 20, entetes=None):
     APPELS.append(url)
+    if url.startswith(serveur.MF_VIGILANCE):
+        if (entetes or {}).get("apikey") != "bonne-cle":
+            raise serveur.ErreurSource("public-api.meteofrance.fr : HTTP 401")
+        return json.dumps(VIGI).encode()
+    if url.startswith(serveur.BAN):
+        if "lat=40.4" in url:                                  # Madrid : hors de France
+            return b'{"features": []}'
+        return json.dumps({"features": [{"properties": {"city": "Pessac", "context": "33, Gironde, Nouvelle-Aquitaine"}}]}).encode()
+    if "minutely_15=" in url:
+        if "icon_d2" in url:
+            raise serveur.ErreurSource("api.open-meteo.com : HTTP 400")
+        return json.dumps({"minutely_15": {"time": HEURES[:2], "precipitation": [0, 1.2]}}).encode()
     if any(p in url for p in PANNE):
         raise serveur.ErreurSource("source.exemple : HTTP 429")
     if url.startswith(serveur.RAINVIEWER):
@@ -37,8 +57,9 @@ def faux_telecharger(url, max_octets=8 << 20):
         return json.dumps({"hourly": {"time": HEURES[:3], "lightning_potential": [0, 1.5, None]}}).encode()
     if "latitude=" in url and "%2C" in url:                     # grille : une réponse par point
         n = url.split("latitude=")[1].split("&")[0].count("%2C") + 1
-        return json.dumps([{"utc_offset_seconds": 0, "hourly": {"time": HEURES, "cape": [float(p)] * len(HEURES)}}
-                           for p in range(n)]).encode()
+        return json.dumps([{"utc_offset_seconds": 0, "hourly": {"time": HEURES, "cape": [float(p)] * len(HEURES),
+                            "wind_speed_10m": [10.0] * len(HEURES), "wind_direction_10m": [270] * len(HEURES),
+                            "wind_gusts_10m": [30.0] * len(HEURES)}} for p in range(n)]).encode()
     if "geocoding" in url:
         return json.dumps({"results": [{"name": "<b>Pessac</b>", "admin1": "Nouvelle-Aquitaine", "country": "France",
                                         "latitude": 44.8, "longitude": -0.63}]}).encode()
@@ -79,7 +100,7 @@ def verifier(nom, obtenu, attendu):
 
 # --- Fichiers servis et refusés ---------------------------------------------
 for chemin, attendu in [
-    ("/", 200), ("/index.html", 200), ("/css/style.css", 200), ("/js/app.js", 200), ("/js/calc.js", 200),
+    ("/", 200), ("/index.html", 200), ("/sw.js", 200), ("/manifest.json", 200), ("/js/graph.js", 200), ("/css/style.css", 200), ("/js/app.js", 200), ("/js/calc.js", 200),
     ("/vendor/leaflet/leaflet.js", 200), ("/vendor/leaflet/leaflet.css", 200), ("/favicon.ico", 204),
     ("/.git/config", 404), ("/.gitignore", 404), ("/serveur.py", 404), ("/foudre.py", 404),
     ("/appairage.py", 404), ("/SPEC.md", 404), ("/js/", 404), ("/js/../serveur.py", 404),
@@ -116,6 +137,39 @@ verifier("grille 15×15", (statut, len(g["lats"]), len(g["lons"]), len(g["cape"]
 verifier("grille : 24 h à partir de l'heure en cours", (len(g["time"]), g["time"][0]), (24, HEURES[3]))
 verifier("grille : un seul appel pour 225 points", sum("hourly=cape" in u for u in APPELS), 1)
 verifier("grille : point i, j", g["cape"][0][16], 16.0)
+
+verifier("grille : vent", (g["vent"][0][0], g["direction"][0][0], g["rafales"][0][0]), (10.0, 270, 30.0))
+
+statut, corps, _ = requete("/api/convection?lat=44.8&lon=-0.63")
+c = json.loads(corps)
+verifier("convection : AROME-HD, LPI absent hors domaine", (statut, c["arome"]["precipitation"], c["lpi"]), (200, [0, 1.2], None))
+
+verifier("commune", json.loads(requete("/api/commune?lat=44.8056&lon=-0.6324")[1]), {"nom": "Pessac", "departement": "33"})
+verifier("commune hors de France", json.loads(requete("/api/commune?lat=40.4&lon=-3.7")[1]), None)
+verifier("commune : position arrondie avant l'envoi", any("lat=44.81&lon=-0.63&" in u for u in APPELS), True)
+
+cle = os.path.join(tmp.name, "meteofrance-cle.txt")
+serveur.MF_CLE = cle
+verifier("vigilance : département refusé", requete("/api/vigilance?dep=../33")[0], 400)
+v = json.loads(requete("/api/vigilance?dep=33")[1])
+verifier("vigilance : sans clé, indicative", (v["officielle"], "clé" in v["raison"]), (False, True))
+with open(cle, "w") as f:
+    f.write("mauvaise-cle\n")
+v = json.loads(requete("/api/vigilance?dep=33")[1])
+verifier("vigilance : clé refusée", (v["officielle"], v["raison"]), (False, "public-api.meteofrance.fr : HTTP 401"))
+with open(cle, "w") as f:
+    f.write("bonne-cle\n")
+v = json.loads(requete("/api/vigilance?dep=33")[1])
+p0 = v["periodes"][0]
+verifier("vigilance officielle : Gironde orange orages", (v["officielle"], p0["couleur"], p0["phenomenes"][0]["id"],
+         p0["phenomenes"][0]["tranches"][0]["couleur"], p0["texte"]), (True, 3, 3, 3, "Orages forts sur l'ouest."))
+verifier("vigilance officielle : département sans phénomène", json.loads(requete("/api/vigilance?dep=2A")[1])["periodes"][0]["couleur"], 1)
+serveur._CACHE.pop("vigilance-mf", None)
+_vigi, VIGI = VIGI, {"product": {"periods": [{"timelaps": {}}]}}
+verifier("vigilance : format inattendu", json.loads(requete("/api/vigilance?dep=33")[1]),
+         {"officielle": False, "raison": "Météo-France : format de réponse inattendu"})
+VIGI = _vigi
+verifier("vigilance : la clé ne sort jamais", "bonne-cle" in requete("/api/vigilance?dep=33")[1].decode(), False)
 
 statut, corps, _ = requete("/api/lieux?q=Pessac")
 verifier("lieux", (statut, json.loads(corps)[0]["nom"]), (200, "<b>Pessac</b>"))   # échappé par la page

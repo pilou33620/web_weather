@@ -3,98 +3,89 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1220">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Météo orage">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="css/icone.svg" type="image/svg+xml">
 <title>web_weather</title>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div id="banner" role="alert" hidden></div>
+<header id="top">
+  <button class="rond" id="b-gauche" aria-label="Ma position"></button>
+  <h1 id="titre">…</h1>
+  <div class="duo" id="b-droite">
+    <button class="rond" id="b-cloche" aria-label="Alertes"><span class="badge" id="badge" hidden></span></button>
+    <button class="rond" id="b-loupe" aria-label="Rechercher un lieu"></button>
+  </div>
+  <button class="rond" id="b-centre" aria-label="Recentrer la carte" hidden></button>
+</header>
+<div id="banniere" role="status" hidden></div>
+
+<section id="p-chasse" class="page" aria-label="Chasse orage">
+  <div id="carte"></div>
+  <div class="sur haut">
+    <div class="pilule" id="pl-flux">…</div>
+    <div class="pilule leg" id="pl-legende"></div>
+    <div class="pilule" id="pl-risque"></div>
+    <div class="pilule alerte-carte" id="pl-approche" role="alert" hidden></div>
+  </div>
+  <div class="sur bas">
+    <div class="info-carte" id="info-carte" hidden></div>
+    <div class="station" id="station"></div>
+    <div class="lecteur" id="lect-cape" hidden>
+      <span>Prévi.</span><input type="range" id="cape-h" min="0" max="0" value="0" aria-label="Heure de prévision (CAPE, vent)"><span id="cape-t">…</span>
+    </div>
+    <div class="lecteur">
+      <button id="play" aria-label="Lecture">▶</button>
+      <input type="range" id="curseur" min="0" max="0" value="0" aria-label="Temps du radar et de la foudre">
+      <span id="curseur-t">…</span>
+    </div>
+    <div class="couches">
+      <button data-couche="foudre" class="c-foudre on" aria-pressed="true" aria-label="Impacts de foudre">⚡</button>
+      <button data-couche="radar" class="c-radar on" aria-pressed="true" aria-label="Radar de pluie">🌧️</button>
+      <button data-couche="vent" class="c-vent" aria-pressed="false" aria-label="Vent prévu">💨</button>
+      <button data-couche="cape" class="c-cape" aria-pressed="false" aria-label="CAPE prévue">🔥</button>
+      <button data-couche="info" class="c-info" aria-pressed="false" aria-label="Légende et sources">ℹ️</button>
+      <button class="rayon" id="b-rayon" aria-label="Rayon d'alerte">⌖ 30</button>
+    </div>
+  </div>
+</section>
+
 <main>
-  <section id="view-accueil" class="view active"><div id="home" class="pad">Chargement…</div></section>
-
-  <section id="view-chasse" class="view mapview">
-    <div id="map-chasse" class="map"></div>
-    <div class="overlay top">
-      <div class="pill" id="pill-flux">⚡ …</div>
-      <div class="pill" id="legend"></div>
-      <div class="pill" id="pill-risk"></div>
-      <div class="pill alert" id="pill-approach" role="alert" hidden></div>
-      <div class="pill warn" id="pill-foudre" hidden></div>
-    </div>
-    <div class="overlay bottom">
-      <div class="card" id="station"></div>
-      <div class="player" id="cape-player" hidden>
-        <span>CAPE</span>
-        <input type="range" id="cape-h" min="0" max="0" value="0" aria-label="Heure de prévision CAPE">
-        <span id="cape-time">…</span>
-      </div>
-      <div class="player">
-        <button id="play" aria-label="Lecture">▶</button>
-        <input type="range" id="slider" min="0" max="0" value="0" aria-label="Temps">
-        <span id="slider-time">…</span>
-      </div>
-      <div class="layers">
-        <button data-layer="foudre" class="on" aria-pressed="true" aria-label="Impacts de foudre">⚡</button>
-        <button data-layer="radar" class="on" aria-pressed="true" aria-label="Radar de pluie">🌧️</button>
-        <button data-layer="cellules" class="on" aria-pressed="true" aria-label="Cellules orageuses">◎</button>
-        <button data-layer="cape" aria-pressed="false" aria-label="Grille CAPE prévue">🔥</button>
-      </div>
-    </div>
+  <section id="p-accueil" class="page"></section>
+  <section id="p-station" class="page"></section>
+  <section id="p-vigilance" class="page"></section>
+  <section id="p-autre" class="page"></section>
+  <section id="p-graphiques" class="page"></section>
+  <section id="p-pro" class="page"></section>
+  <section id="p-convection" class="page"></section>
+  <section id="p-modeles" class="page"></section>
+  <section id="p-fiabilite" class="page"></section>
+  <section id="p-brief" class="page"></section>
+  <section id="p-alertes" class="page"></section>
+  <section id="p-recherche" class="page">
+    <form id="f-recherche" class="row">
+      <input id="q" type="search" placeholder="Ville…" minlength="2" maxlength="60" aria-label="Rechercher une ville" required style="flex:1">
+      <button class="bouton" type="submit">Chercher</button>
+    </form>
+    <div id="res" class="res"></div>
   </section>
-
-  <section id="view-donnees" class="view"><div id="donnees" class="pad">Chargement…</div></section>
-  <section id="view-vigilance" class="view"><div id="vigilance" class="pad">Chargement…</div></section>
-
-  <section id="view-reglages" class="view"><div class="pad">
-    <h2>Réglages</h2>
-    <div class="card">
-      <h3>Lieu</h3>
-      <div class="muted" id="lieu-actuel"></div>
-      <form id="lieu-form" class="row" style="margin-top:8px">
-        <input id="lieu-q" type="search" placeholder="Ville…" minlength="2" maxlength="60" aria-label="Rechercher une ville" required>
-        <button type="submit">🔍</button>
-      </form>
-      <div id="lieu-res" class="res"></div>
-      <button type="button" id="lieu-defaut" class="lien">Revenir à Pessac (33)</button>
-    </div>
-    <div class="card">
-      <h3>Seuils d'alerte <span class="muted">(heuristiques)</span></h3>
-      <form id="seuils-form" class="seuils">
-        <label>Orage probable : CAPE ≥ <input name="cape" type="number" min="0" max="10000" step="50"> J/kg</label>
-        <label>… et Lifted Index ≤ <input name="li" type="number" min="-15" max="10" step="0.5"></label>
-        <label>Rafales fortes ≥ <input name="rafales" type="number" min="20" max="200" step="5"> km/h</label>
-        <label>Foudre probable : LPI ≥ <input name="lpi" type="number" min="0" max="50" step="0.5"> J/kg</label>
-        <label>Alerte d'approche sous <input name="approche" type="number" min="5" max="300" step="5"> km</label>
-        <div class="row"><button type="submit">Enregistrer</button><button type="button" id="seuils-defaut" class="lien">Valeurs par défaut</button></div>
-      </form>
-    </div>
-    <div class="card muted" style="font-size:13px">
-      <h3>À propos</h3>
-      Unités : °C, km/h, mm. Le score de risque, les alertes et la Vigilance sont <b>calculés par nos seuils</b> :
-      ce ne sont ni des prévisions officielles ni la vigilance de Météo-France. Les impacts de foudre viennent du réseau
-      communautaire Blitzortung (retard de quelques secondes, couverture non garantie).
-    </div>
-  </div></section>
-
-  <footer class="pad">
-    Météo : <a href="https://open-meteo.com">Weather data by Open-Meteo.com</a> (CC BY 4.0) ·
-    Radar : <a href="https://www.rainviewer.com">Weather data by Rain Viewer</a> ·
-    Foudre : <a href="https://www.blitzortung.org">Blitzortung.org</a> (CC BY-SA 4.0) ·
-    Fond de carte : <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>
-  </footer>
 </main>
 
 <nav>
-  <button data-view="accueil" class="on"><i>🏠</i>Accueil</button>
-  <button data-view="chasse"><i>⛈️</i>Chasse orage</button>
-  <button data-view="donnees"><i>📊</i>Données</button>
-  <button data-view="vigilance"><i>🚦</i>Vigilance</button>
-  <button data-view="reglages"><i>⚙️</i>Réglages</button>
+  <button data-page="accueil" aria-label="Accueil"></button>
+  <button data-page="chasse" aria-label="Chasse orage"></button>
+  <button data-page="station" aria-label="Station"></button>
+  <button data-page="vigilance" aria-label="Vigilance"></button>
+  <button data-page="autre" aria-label="Autre"></button>
 </nav>
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="js/calc.js"></script>
+<script src="js/graph.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

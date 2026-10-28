@@ -46,6 +46,7 @@ AGENT = "web_weather/1.0 (+https://github.com/pilou33620/web_weather)"
 # Ce que la page charge, et rien d'autre du dossier (ni .git/, ni les scripts).
 STATIQUE = re.compile(
     r"^/(?:index\.html)?$"
+    r"|^/(?:sw\.js|manifest\.json)$"
     r"|^/(?:css|js|vendor)(?:/[\w-][\w.-]*)+$",
     re.IGNORECASE)
 
@@ -54,16 +55,27 @@ OM_ENSEMBLE = "https://ensemble-api.open-meteo.com/v1/ensemble"
 OM_LIEUX = "https://geocoding-api.open-meteo.com/v1/search"
 RAINVIEWER = "https://api.rainviewer.com/public/weather-maps.json"
 OSM = "https://tile.openstreetmap.org/%d/%d/%d.png"
+BAN = "https://api-adresse.data.gouv.fr/reverse/"
+MF_VIGILANCE = "https://public-api.meteofrance.fr/public/DPVigilance/v1/cartevigilance/encours"
+# Clé de l'API Météo-France (portail-api.meteofrance.fr), hors git ; relue à chaque appel
+MF_CLE = os.path.join(os.path.expanduser("~"), ".web_tools", "meteofrance-cle.txt")
 
 ACTUEL = ("temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,"
           "wind_gusts_10m,wind_direction_10m,pressure_msl,cloud_cover,precipitation")
 HORAIRE = ("temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,"
            "precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
            "pressure_msl,cloud_cover,cape,lifted_index,convective_inhibition,freezing_level_height,"
-           "uv_index,visibility")
+           "uv_index,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
+           # niveaux de pression : indices d'orage (K, TT, cisaillements, hélicité approchée)
+           "temperature_850hPa,temperature_700hPa,temperature_500hPa,dew_point_850hPa,dew_point_700hPa,"
+           "wind_speed_925hPa,wind_direction_925hPa,wind_speed_850hPa,wind_direction_850hPa,"
+           "wind_speed_700hPa,wind_direction_700hPa,wind_speed_500hPa,wind_direction_500hPa")
 QUOTIDIEN = ("weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,"
              "precipitation_probability_max,wind_gusts_10m_max,sunrise,sunset,uv_index_max")
-MODELES = "meteofrance_seamless,icon_seamless,ecmwf_ifs025,gfs_seamless"
+MODELES = ("ecmwf_ifs025,gfs_seamless,icon_seamless,meteofrance_arome_france,"
+           "meteofrance_arome_france_hd,meteofrance_arpege_europe")
+MODELES_HORAIRE = ("temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,"
+                   "cape,lifted_index")
 
 GRILLE_N = 15                 # 15×15 points…
 GRILLE_KM = 150               # …sur environ 150 km : 225 appels par heure et par lieu
@@ -85,8 +97,8 @@ class ParametreInvalide(ValueError):
 
 # --- Appels sortants et cache mémoire ------------------------------------------
 
-def telecharger(url, max_octets=8 << 20):
-    req = urllib.request.Request(url, headers={"User-Agent": AGENT})
+def telecharger(url, max_octets=8 << 20, entetes=None):
+    req = urllib.request.Request(url, headers={"User-Agent": AGENT, **(entetes or {})})
     hote = urllib.parse.urlsplit(url).hostname
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
@@ -169,8 +181,24 @@ def meteo(lat, lon):
 
 def modeles(lat, lon):
     return en_cache(("modeles", lat, lon), 1800, lambda: json_de(
-        OM, latitude=lat, longitude=lon, timezone="auto", forecast_days=3, wind_speed_unit="kmh",
-        models=MODELES, hourly="temperature_2m,precipitation,wind_gusts_10m,cape"))
+        OM, latitude=lat, longitude=lon, timezone="auto", forecast_days=7, wind_speed_unit="kmh",
+        models=MODELES, hourly=MODELES_HORAIRE))
+
+
+def convection(lat, lon):
+    """AROME-HD (1,5 km) par quart d'heure sur 12 h, et le LPI ICON-D2 au même pas s'il existe."""
+    def calcul():
+        arome = json_de(OM, latitude=lat, longitude=lon, timezone="auto", wind_speed_unit="kmh",
+                        models="meteofrance_arome_france_hd", forecast_minutely_15=48,
+                        minutely_15="precipitation,cape,wind_gusts_10m")
+        try:
+            l = json_de(OM, latitude=lat, longitude=lon, timezone="auto", models="icon_d2",
+                        forecast_minutely_15=48, minutely_15="lightning_potential")["minutely_15"]
+            lpi = {"time": l["time"], "valeurs": l["lightning_potential"]}
+        except (ErreurSource, KeyError, ValueError):
+            lpi = None
+        return {"arome": arome.get("minutely_15"), "lpi": lpi}
+    return en_cache(("convection", lat, lon), 900, calcul)
 
 
 def ensemble(lat, lon):
@@ -189,20 +217,23 @@ def points_grille(lat, lon):
 
 
 def grille(lat, lon):
-    """CAPE des 24 prochaines heures sur la grille : cape[h][i * N + j] (i : latitude, j : longitude)."""
+    """CAPE et vent des 24 prochaines heures sur la grille : cape[h][i * N + j] (i : latitude, j : longitude)."""
     def calcul():
         lats, lons = points_grille(lat, lon)
         pts = [(a, b) for a in lats for b in lons]
         rep = json_de(OM, latitude=",".join(str(a) for a, _ in pts),
                       longitude=",".join(str(b) for _, b in pts),
-                      hourly="cape", forecast_days=2, timezone="auto")
+                      hourly="cape,wind_speed_10m,wind_direction_10m,wind_gusts_10m", forecast_days=2,
+                      wind_speed_unit="kmh", timezone="auto")
         decalage = timedelta(seconds=rep[0]["utc_offset_seconds"])
         maintenant = (datetime.now(timezone.utc) + decalage).strftime("%Y-%m-%dT%H:00")
         heures = rep[0]["hourly"]["time"]
         debut = next((k for k, t in enumerate(heures) if t >= maintenant), 0)
         fin = min(debut + 24, len(heures))
-        return {"lats": lats, "lons": lons, "time": heures[debut:fin],
-                "cape": [[p["hourly"]["cape"][k] for p in rep] for k in range(debut, fin)]}
+        champ = lambda nom: [[p["hourly"][nom][k] for p in rep] for k in range(debut, fin)]
+        return {"lats": lats, "lons": lons, "time": heures[debut:fin], "cape": champ("cape"),
+                "vent": champ("wind_speed_10m"), "direction": champ("wind_direction_10m"),
+                "rafales": champ("wind_gusts_10m")}
     return en_cache(("grille", lat, lon), 3600, calcul)
 
 
@@ -268,6 +299,69 @@ def lieux(texte):
     return en_cache(("lieux", texte.lower()), 86400, calcul)
 
 
+DEPARTEMENT = re.compile(r"^(?:\d{2}|2[AB]|97\d)$")
+
+
+def commune(lat, lon):
+    """Commune et département d'une position (API Adresse, France seulement), ou None ailleurs.
+    La position est déjà arrondie à 0,01° (environ 1 km) : l'adresse exacte ne part pas."""
+    def calcul():
+        rep = json_de(BAN, lat=lat, lon=lon, limit=1)
+        if not rep.get("features"):
+            return None
+        p = rep["features"][0]["properties"]
+        dep = str(p.get("context", "")).split(",")[0].strip()
+        return {"nom": str(p.get("city", "")), "departement": dep if DEPARTEMENT.match(dep) else None}
+    return en_cache(("commune", lat, lon), 30 * 86400, calcul)
+
+
+def carte_vigilance():
+    """Carte de vigilance Météo-France en cours, réduite à l'utile, par département."""
+    try:
+        with open(MF_CLE, encoding="utf-8") as f:
+            cle = f.read().strip()
+    except OSError:
+        cle = ""
+    if not cle:
+        raise ErreurSource("clé Météo-France absente (~/.web_tools/meteofrance-cle.txt)")
+
+    def calcul():
+        brut = lire_json(telecharger(MF_VIGILANCE, entetes={"apikey": cle}), "public-api.meteofrance.fr")
+        periodes = []
+        for per in brut["product"]["periods"]:
+            textes = (per.get("text_items") or {}).get("text") or []
+            deps = {}
+            for d in per["timelaps"]["domain_ids"]:
+                deps[str(d["domain_id"])] = {
+                    "couleur": int(d.get("max_color_id") or 1),
+                    "phenomenes": [{"id": int(ph["phenomenon_id"]), "couleur": int(ph.get("phenomenon_max_color_id") or 1),
+                                    "tranches": [{"debut": t.get("begin_time"), "fin": t.get("end_time"),
+                                                  "couleur": int(t.get("color_id") or 1)}
+                                                 for t in ph.get("timelaps_items") or []]}
+                                   for ph in d.get("phenomenon_items") or []]}
+            periodes.append({"echeance": per.get("echeance"), "debut": per.get("begin_validity_time"),
+                             "fin": per.get("end_validity_time"),
+                             "texte": " ".join(str(t) for t in textes) if isinstance(textes, list) else str(textes),
+                             "departements": deps})
+        return periodes
+    return en_cache("vigilance-mf", 600, calcul)
+
+
+def vigilance(requete):
+    dep = urllib.parse.parse_qs(requete).get("dep", [""])[0].upper()
+    if not DEPARTEMENT.match(dep):
+        raise ParametreInvalide
+    try:
+        periodes = carte_vigilance()
+    except ErreurSource as e:
+        return {"officielle": False, "raison": str(e)}     # la page affiche alors la vigilance indicative
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return {"officielle": False, "raison": "Météo-France : format de réponse inattendu"}
+    return {"officielle": True, "departement": dep,
+            "periodes": [{"echeance": p["echeance"], "debut": p["debut"], "fin": p["fin"], "texte": p["texte"],
+                          **p["departements"].get(dep, {"couleur": 1, "phenomenes": []})} for p in periodes]}
+
+
 def impacts(lat, lon):
     return {"maintenant": int(time.time() * 1000), "etat": FOUDRE.etat(),
             "impacts": FOUDRE.autour(lat, lon, RAYON_FOUDRE_KM)}
@@ -277,6 +371,9 @@ API = {
     "/api/meteo": lambda q: meteo(*coordonnees(q)),
     "/api/modeles": lambda q: modeles(*coordonnees(q)),
     "/api/ensemble": lambda q: ensemble(*coordonnees(q)),
+    "/api/convection": lambda q: convection(*coordonnees(q)),
+    "/api/commune": lambda q: commune(*coordonnees(q)),
+    "/api/vigilance": vigilance,
     "/api/grille": lambda q: grille(*coordonnees(q, 0.1)),
     "/api/foudre": lambda q: impacts(*coordonnees(q)),
     "/api/radar": lambda q: radar(),

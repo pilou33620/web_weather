@@ -1,0 +1,10 @@
+{
+  "name": "web_weather — météo orage",
+  "short_name": "Météo orage",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "lang": "fr",
+  "icons": [{ "src": "css/icone.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

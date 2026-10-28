@@ -2,11 +2,16 @@
 
 Météo orientée orage, pensée pour le téléphone. Lieu par défaut : Pessac (33).
 
-- **Accueil** : conditions actuelles, brief météo, risque d'orage (score indicatif), alertes « Surveillance » sur 48 h, prochaines heures, 10 jours.
-- **Chasse orage** : carte avec le radar de pluie (RainViewer, 2 h d'images), les **impacts de foudre en temps réel** (Blitzortung), les cellules actives, la distance de l'impact le plus proche, l'alerte d'approche, et la grille CAPE prévue (15×15 points, 24 h).
-- **Données** : valeurs du point (« station », issues du modèle), graphiques 48 h, comparaison de 4 modèles, fiabilité (Ensemble ICON, 40 membres), tableau horaire, état des sources.
-- **Vigilance** : niveaux **indicatifs** par jour (orages, vent, pluie), calculés par nos seuils. Ce n'est pas la vigilance officielle.
-- **Réglages** : lieu (recherche de ville), seuils d'alerte. Gardés dans le navigateur de chaque appareil.
+Interface claire façon iOS : barre du haut (position, lieu, alertes, recherche), menu flottant en bas.
+
+- **Accueil** : conditions actuelles, accès aux analyses, activité électrique réelle (orage actif proche, activité régionale), alertes probables (orage, pluies fortes, rafales, foudre) avec « dans N heures », prochaines heures, 10 jours.
+  - **Graphiques** : 24 h / 48 h / 72 h / 7 j, modèles à comparer, analyse orageuse (jauge, heures les plus à risque), température, pluie et probabilité, vent, nuages par étage.
+  - **Analyse orage pro** : pic prévu, type d'orage, discussion technique, risques (grêle, vent, tornade, foudre), indices K, TT, SCP, STP, EHI, LCL, cisaillements, SRH (approchée).
+  - **Convection HD** : AROME-HD par quart d'heure sur 12 h (pluie, CAPE, rafales, LPI).
+  - **Modèles**, **Fiabilité** (Ensemble ICON 40 membres), **Brief météo** (synthèse par thème, confiance, sources).
+- **Chasse orage** : carte avec radar (RainViewer), impacts de foudre en temps réel (Blitzortung), cellules, distance, rayon d'alerte, alerte d'approche, couches vent et CAPE prévues.
+- **Station** : valeurs du point et tableau 24 h. **Vigilance** : officielle Météo-France si la clé est posée, sinon indicative. **Autre** : suivi de position, notifications, seuils, état des sources.
+- **Cloche** : alertes en cours ; notifications du navigateur quand un orage est proche (appli ouverte ou en arrière-plan).
 
 Le score, les alertes et la Vigilance sont des heuristiques (voir `SPEC.md` §4 bis), jamais des prévisions officielles.
 
@@ -20,6 +25,8 @@ Le navigateur ne parle qu'au serveur, qui relaie et garde en cache :
 | [RainViewer](https://www.rainviewer.com) | radar de pluie (zoom 7 au plus) | liste 2 min, tuiles 2 h |
 | [OpenStreetMap](https://www.openstreetmap.org/copyright) | fond de carte, assombri par la page | disque, 7 jours (`cache/`) |
 | [Blitzortung.org](https://www.blitzortung.org) (CC BY-SA 4.0) | impacts de foudre, websocket permanent | mémoire, 2 h |
+| [Météo-France](https://portail-api.meteofrance.fr) | vigilance officielle par département (clé nécessaire) | 10 min |
+| [API Adresse](https://adresse.data.gouv.fr) (Licence ouverte) | commune et département d'une position (arrondie à 1 km) | 30 jours |
 
 Budget Open-Meteo : environ 5 400 appels par jour pour la grille d'un lieu (225 points par heure), sur un quota gratuit de 10 000.
 
@@ -45,7 +52,15 @@ Windows : double-clic sur `serveur.py`. Termux : `pkg install python git openssl
 | `--sans-pause` | ne pas attendre une touche à l'arrêt |
 | `--sans-maj` | ne pas vérifier les mises à jour au démarrage |
 
+## Vigilance officielle Météo-France
+
+1. Créer un compte sur [portail-api.meteofrance.fr](https://portail-api.meteofrance.fr) et s'abonner à « Données Publiques Vigilance ».
+2. Générer une clé d'API et la coller seule dans `~/.web_tools/meteofrance-cle.txt` (`chmod 600`). Elle n'est jamais dans git ni dans les journaux.
+3. Rien à redémarrer : la clé est relue à chaque appel. Sans clé ou si elle est refusée, la page affiche la vigilance indicative et la raison.
+
 ## Utiliser depuis un autre appareil
+
+La position automatique et les notifications exigent le HTTPS : utiliser l'adresse **Réseau** (pas `http://` en clair). Sur iPhone, « Sur l'écran d'accueil » permet les notifications.
 
 Sans `--local`, le serveur écoute sur le réseau local et sur Tailscale, et affiche l'adresse **Réseau** et un **code d'appairage** à 6 chiffres. Ouvrir cette adresse sur le téléphone puis entrer le code une fois. L'appairage, le jeton et le HTTPS local sont communs à tous les web tools (`appairage.py`, copie de `web_suite/lanceur/appairage.py`). Pour éviter l'alerte du navigateur, installer l'autorité locale proposée sur `/appairage/ca.pem`. Ne jamais exposer le port sur Internet.
 
@@ -87,5 +102,7 @@ python3 foudre.py              # LZW, trames websocket, tampon des impacts
 node test/test_calc.js         # score, alertes, vigilance, ensemble, impacts
 python3 appairage.py           # appairage commun
 ```
+
+`node test/rendu_pages.js http://127.0.0.1:8893` rend chaque page dans un faux DOM avec les vraies réponses d'un serveur lancé à part (`python3 serveur.py --local --sans-maj --sans-navigateur --port 8893`) : erreurs, « undefined », « NaN ».
 
 `python3 foudre.py --direct` écoute le vrai flux Blitzortung pendant 30 s et donne un bilan.

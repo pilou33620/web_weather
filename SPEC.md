@@ -1,6 +1,6 @@
-# web_weather : spécification (v1.0)
+# web_weather : spécification (v2.0)
 
-Statut : version 1 construite (serveur, page, bancs, CI). Mode d'emploi : `README.md`. Partie serveur : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md` (section 5).
+Statut : version 2 (refonte claire façon iOS d'après les captures de référence du 2026-10-28). Mode d'emploi : `README.md`. Partie serveur : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md` (section 5).
 
 ## 1. Objectif
 
@@ -146,6 +146,18 @@ Référence : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md`, appliqué tel quel :
 - Frontière exacte du domaine ICON-D2 : seulement 12 villes testées.
 - Comptage exact des quotas Open-Meteo pour les requêtes multi-points (déduit d'un 429, non documenté) ; 600 et 700 points non testés.
 - Modèles de l'Ensemble : seul `icon_seamless` testé.
+
+## 8 bis. Version 2 (décisions du 2026-10-28)
+
+- Thème toujours clair, carte claire (OSM sans filtre). Menu : Accueil, Chasse orage, Station, Vigilance, Autre ; sous-pages Graphiques, Analyse orage pro, Convection HD, Modèles, Fiabilité, Brief météo ; cloche et recherche.
+- Vigilance officielle Météo-France (API DPVigilance, en-tête `apikey`, clé dans `~/.web_tools/meteofrance-cle.txt`). Structure lue : `product.periods[].timelaps.domain_ids[].phenomenon_items[].timelaps_items[]` (tirée d'un client open source, à confirmer avec une vraie clé). Sans clé : vigilance indicative.
+- Commune et département par l'API Adresse (reverse), position arrondie à 0,01°.
+- Indices d'orage depuis les niveaux de pression Open-Meteo : K, TT, LCL (125 × (T − Td)), cisaillements 0-1/0-3/0-6 km (10 m vers 925/700/500 hPa). SRH approchée (vents 10 m/925/850/700 hPa, mouvement de Bunkers) : SCP, STP, EHI marqués « approchés ». Risques grêle/vent/tornade/foudre et type d'orage : heuristiques.
+- Convection HD : AROME-HD `minutely_15` sur 12 h + LPI ICON-D2 15 min.
+- Grille : vent et rafales ajoutés au même appel que la CAPE (couche vent).
+- Suivi automatique de la position (HTTPS requis) ; un choix manuel de ville l'arrête.
+- Notifications : cloche dans la page + notification du navigateur (service worker minimal `sw.js`, aucun cache hors ligne). Pas de Web Push appli fermée (demanderait une dépendance de chiffrement).
+- Nouvelle alerte « Pluies fortes » (≥ 10 mm/h) ; rayon « orage actif proche » 30 km par défaut (10/30/50/100).
 
 ## 9. Questions ouvertes
 

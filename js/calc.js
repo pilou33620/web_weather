@@ -22,7 +22,8 @@
   const ageColor = min => AGE_BANDS.find(b => min < b[0])[1];
 
   // Seuils par défaut (SPEC §4 bis), modifiables dans Réglages.
-  const SEUILS = { cape: 500, li: -1, rafales: 60, lpi: 2, approche: 60 };
+  // rayon : orage « actif proche » et alerte d'approche (km) ; pluie : pluies fortes (mm/h).
+  const SEUILS = { cape: 500, li: -1, rafales: 60, lpi: 2, pluie: 10, rayon: 30 };
 
   // Heuristique (pas un modèle validé). Avec LPI : CAPE 36, LI 20, pluie 16, rafales 8, LPI 20.
   function riskScore({ cape = 0, li = 0, cin = 0, gust = 0, pop = 0, lpi = null }) {
@@ -57,8 +58,12 @@
   function alertWindows(h, lpi, from, to, seuils = SEUILS) {
     const idx = []; for (let i = from; i < to; i++) idx.push(i);
     const rules = [
-      ['Orage probable', i => h.cape[i] >= seuils.cape && h.lifted_index[i] <= seuils.li, i => h.cape[i],
-        i => `CAPE ${Math.round(h.cape[i])} · LI ${h.lifted_index[i].toFixed(1)}`],
+      ['Orage probable', i => h.cape[i] >= seuils.cape && h.lifted_index[i] != null && h.lifted_index[i] <= seuils.li, i => h.cape[i],
+        i => [`CAPE ${Math.round(h.cape[i])}`, `LI ${h.lifted_index[i].toFixed(1)}`,
+          h.dew_point_2m?.[i] != null && `Td ${Math.round(h.dew_point_2m[i])}°`,
+          h.precipitation_probability?.[i] != null && `pluie ${Math.round(h.precipitation_probability[i])} %`].filter(Boolean).join(' · ')],
+      ['Pluies fortes', i => (h.precipitation?.[i] ?? 0) >= seuils.pluie, i => h.precipitation[i],
+        i => `${h.precipitation[i].toFixed(1)} mm/h prévu`],
       ['Rafales fortes', i => h.wind_gusts_10m[i] >= seuils.rafales, i => h.wind_gusts_10m[i],
         i => `Rafales ${Math.round(h.wind_gusts_10m[i])} km/h`],
       ['Foudre probable', i => lpi[i] != null && lpi[i] >= seuils.lpi, i => lpi[i],
@@ -152,8 +157,94 @@
     return ['❔', 'Inconnu'];
   }
 
+  // « dans 10 heures » ; « en cours » si c'est commencé.
+  function dans(ms) {
+    if (ms <= 0) return 'en cours';
+    const m = Math.round(ms / 60000);
+    if (m < 60) return `dans ${m} minute${m > 1 ? 's' : ''}`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `dans ${h} heure${h > 1 ? 's' : ''}`;
+    const j = Math.round(h / 24);
+    return `dans ${j} jour${j > 1 ? 's' : ''}`;
+  }
+
+  // Activité électrique réelle autour du lieu sur la dernière heure : « actif » sous le rayon, « régional » sous 150 km.
+  function activite(vis, lat, lon, rayon) {
+    let proche = 0, region = 0, best = null;
+    for (const s of vis) {
+      if (s.age > 60) continue;
+      const km = haversineKm(lat, lon, s.lat, s.lon);
+      if (km <= rayon) proche++;
+      if (km <= 150) { region++; if (!best || km < best) best = km; }
+    }
+    if (proche) return { niveau: 'actif', n: proche, km: best, rayon };
+    if (region) return { niveau: 'regional', n: region, km: best, rayon: 150 };
+    return null;
+  }
+
+  // ---- Indices d'orage à partir des niveaux de pression (approximations, voir SPEC §4 bis) ----
+  // Niveaux : 10 m, 925 hPa (~0,8 km), 850 (~1,5 km), 700 (~3 km), 500 hPa (~5,5 km, pris pour 6 km).
+  const NIV = [['wind_speed_10m', 'wind_direction_10m'], ['wind_speed_925hPa', 'wind_direction_925hPa'],
+    ['wind_speed_850hPa', 'wind_direction_850hPa'], ['wind_speed_700hPa', 'wind_direction_700hPa'],
+    ['wind_speed_500hPa', 'wind_direction_500hPa']];
+  // Vent qui VIENT de dir (météo) -> composantes u, v en m/s
+  const vec = (kmh, dir) => [-kmh / 3.6 * Math.sin(dir * RAD), -kmh / 3.6 * Math.cos(dir * RAD)];
+  function indices(h, i) {
+    const g = k => h[k]?.[i];
+    const T850 = g('temperature_850hPa'), Td850 = g('dew_point_850hPa'), T700 = g('temperature_700hPa'),
+      Td700 = g('dew_point_700hPa'), T500 = g('temperature_500hPa'), T2 = g('temperature_2m'), Td2 = g('dew_point_2m');
+    const lv = NIV.map(([s, d]) => (g(s) == null || g(d) == null ? null : vec(g(s), g(d))));
+    if ([T850, Td850, T700, Td700, T500, T2, Td2].some(v => v == null) || lv.includes(null)) return null;
+    const ecart = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const sh1 = ecart(lv[0], lv[1]), sh3 = ecart(lv[0], lv[3]), sh6 = ecart(lv[0], lv[4]);
+    // Mouvement de la cellule (Bunkers, cellule droite) : vent moyen 0-6 km + 7,5 m/s à droite du cisaillement
+    const moy = [0, 1].map(c => lv.reduce((s, v) => s + v[c], 0) / lv.length);
+    const sx = lv[4][0] - lv[0][0], sy = lv[4][1] - lv[0][1], n = Math.hypot(sx, sy) || 1;
+    const cm = [moy[0] + 7.5 * sy / n, moy[1] - 7.5 * sx / n];
+    const srh = l => { let s = 0; for (let k = 0; k < l.length - 1; k++) { const a = l[k], b = l[k + 1];
+      s += (b[0] - cm[0]) * (a[1] - cm[1]) - (a[0] - cm[0]) * (b[1] - cm[1]); } return s; };
+    const SRH1 = srh(lv.slice(0, 2)), SRH3 = srh(lv.slice(0, 4));
+    const cape = g('cape') ?? 0, cin = g('convective_inhibition') ?? 0, LCL = Math.max(0, 125 * (T2 - Td2));
+    return {
+      K: T850 - T500 + Td850 - (T700 - Td700), TT: T850 + Td850 - 2 * T500, LCL,
+      sh1: sh1 * 3.6, sh3: sh3 * 3.6, sh6: sh6 * 3.6, SRH1, SRH3, cape, cin, li: g('lifted_index'),
+      iso0: g('freezing_level_height'), rafales: g('wind_gusts_10m'),
+      SCP: cape / 1000 * Math.max(0, SRH3) / 50 * (sh6 < 10 ? 0 : Math.min(sh6 / 20, 1)),
+      STP: cape / 1500 * clamp((2000 - LCL) / 1000, 0, 1) * Math.max(0, SRH1) / 150 *
+        (sh6 < 12.5 ? 0 : Math.min(sh6 / 20, 1.5)) * clamp((200 - cin) / 150, 0, 1),
+      EHI: cape * Math.max(0, SRH3) / 160000,
+    };
+  }
+  const LECTURE = {
+    K: v => (v >= 40 ? 'Orages violents très probables' : v >= 35 ? 'Orages forts probables' : v >= 30 ? 'Orages probables' : v >= 25 ? 'Orages isolés possibles' : 'Orages peu probables'),
+    TT: v => (v >= 55 ? 'Orages forts' : v >= 50 ? 'Orages probables' : v >= 44 ? 'Orages isolés possibles' : 'Peu favorable'),
+    SCP: v => (v >= 1 ? 'Supercellule possible' : 'Pas supercellulaire'),
+    STP: v => (v >= 1 ? 'Tornade significative possible' : 'Pas tornadique'),
+    EHI: v => (v >= 1 ? 'Favorable aux tornades' : 'Pas favorable'),
+    LCL: v => (v < 1000 ? 'Très bas (tornadique)' : v < 1500 ? 'Bas' : 'Élevé'),
+  };
+  function typeOrage(x) {
+    if (!x || x.cape < 300) return ['Pas d\'orage organisé', 'Énergie trop faible pour des orages notables.'];
+    const s = x.sh6 / 3.6;
+    if (s < 10) return ['Unicellulaire', 'Orages isolés de courte durée, peu organisés.'];
+    if (s < 18) return ['Multicellulaire', 'Groupes de cellules se régénérant, durée prolongée.'];
+    if (x.SCP >= 1) return ['Supercellulaire possible', 'Cisaillement et hélicité suffisants pour des cellules tournantes.'];
+    return ['Orage organisé', 'Convection bien structurée, cisaillement modéré.'];
+  }
+  // Probabilités heuristiques (pas un modèle validé), en %.
+  function risques(x, lpi) {
+    const p = v => Math.round(clamp(v, 0, 1) * 100), conv = clamp(x.cape / 1500, 0, 1), s6 = x.sh6 / 3.6;
+    return [
+      ['Grêle', p(conv * (0.4 + 0.4 * clamp((s6 - 10) / 15, 0, 1) + (x.iso0 != null && x.iso0 < 3500 ? 0.2 : 0)))],
+      ['Vents violents', p(Math.max(clamp(((x.rafales ?? 0) - 60) / 50, 0, 1), conv * clamp((s6 - 12) / 15, 0, 1)))],
+      ['Tornade', p(clamp(x.STP / 2, 0, 1) * 0.6 + conv * clamp((1200 - x.LCL) / 1000, 0, 1) * clamp(x.SRH1 / 150, 0, 1) * 0.4)],
+      ['Foudre', p(lpi != null ? lpi / 3 : conv * clamp(-(x.li ?? 0) / 4, 0, 1))],
+    ];
+  }
+  const niveauRisque = pc => (pc < 15 ? 'Faible' : pc < 40 ? 'Modéré' : pc < 70 ? 'Élevé' : 'Très élevé');
+
   const api = { clamp, haversineKm, bearingDeg, compass, AGE_BANDS, ageColor, SEUILS, riskScore, riskLevel,
     alignLpi, hourRisk, alertWindows, VIGI, vigilance, quantile, bands, rainProb, visibleAt, nearest, cells,
-    approach, weatherLabel };
+    approach, weatherLabel, dans, activite, indices, LECTURE, typeOrage, risques, niveauRisque };
   if (typeof module !== 'undefined') module.exports = api; else root.Calc = api;
 })(typeof window !== 'undefined' ? window : globalThis);
