@@ -107,7 +107,18 @@ ok(() => {
   assert.deepEqual(['niveau', 'n'].map(k => C.activite(v, ...P, 10)[k]), ['regional', 5]);
   assert.equal(C.activite([], ...P, 30), null);
 });
-console.log(`OK : ${n} contrôles`);
+
+// Isobares : pression qui monte vers l'est (0, 1, 2 sur chaque ligne), niveau 0,5 entre les deux premières colonnes.
+ok(() => {
+  const segs = C.isolignes([0, 1, 2, 0, 1, 2, 0, 1, 2], [44, 45, 46], [0, 1, 2], 0.5);
+  assert.equal(segs.length, 2);
+  assert.ok(segs.flat().every(([la, lo]) => lo === 0.5 && la >= 44 && la <= 46));
+  assert.equal(C.isolignes([0, 1, 2, 0, null, 2, 0, 1, 2], [44, 45, 46], [0, 1, 2], 0.5).length, 0); // trou : rien d'inventé autour
+});
+ok(() => assert.deepEqual(C.niveauxIso([1012.2, 1014.9]), [1013, 1014]));
+ok(() => assert.deepEqual(C.niveauxIso([1000, 1009]), [1000, 1002, 1004, 1006, 1008]));
+ok(() => assert.deepEqual(C.niveauxIso([null]), []));
+console.log(`OK : ${n} contrôles (avec isobares)`);
 
 // Graphiques : SVG produit, trous (null) tolérés, cas vide.
 const G = require('../js/graph.js');

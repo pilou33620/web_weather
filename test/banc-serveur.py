@@ -59,7 +59,9 @@ def faux_telecharger(url, max_octets=8 << 20, entetes=None):
         n = url.split("latitude=")[1].split("&")[0].count("%2C") + 1
         return json.dumps([{"utc_offset_seconds": 0, "hourly": {"time": HEURES, "cape": [float(p)] * len(HEURES),
                             "wind_speed_10m": [10.0] * len(HEURES), "wind_direction_10m": [270] * len(HEURES),
-                            "wind_gusts_10m": [30.0] * len(HEURES)}} for p in range(n)]).encode()
+                            "wind_gusts_10m": [30.0] * len(HEURES), "temperature_2m": [12.5] * len(HEURES),
+                            "cloud_cover": [80] * len(HEURES), "pressure_msl": [1012.0 + p / 100] * len(HEURES)}}
+                           for p in range(n)]).encode()
     if "geocoding" in url:
         return json.dumps({"results": [{"name": "<b>Pessac</b>", "admin1": "Nouvelle-Aquitaine", "country": "France",
                                         "latitude": 44.8, "longitude": -0.63}]}).encode()
@@ -139,6 +141,7 @@ verifier("grille : un seul appel pour 225 points", sum("hourly=cape" in u for u 
 verifier("grille : point i, j", g["cape"][0][16], 16.0)
 
 verifier("grille : vent", (g["vent"][0][0], g["direction"][0][0], g["rafales"][0][0]), (10.0, 270, 30.0))
+verifier("grille : température, nuages, pression", (g["temperature"][0][0], g["nuages"][0][0], g["pression"][0][16]), (12.5, 80, 1012.16))
 
 statut, corps, _ = requete("/api/convection?lat=44.8&lon=-0.63")
 c = json.loads(corps)

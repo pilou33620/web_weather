@@ -26,7 +26,7 @@
     loupe: svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>'),
     retour: svg('<path d="m15 4-8 8 8 8"/>'),
     accueil: svg('<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/>'),
-    chasse: svg('<path d="M7 15a4.5 4.5 0 1 1 1-8.9A6 6 0 0 1 19 8a3.5 3.5 0 0 1-1 7z"/><path d="m12.5 13-2 4h3l-2 4"/>'),
+    carte: svg('<path d="m3 6 6-2.5 6 2.5 6-2.5v14.5L15 20.5 9 18l-6 2.5z"/><path d="M9 3.5V18M15 6v14.5"/>'),
     station: svg('<rect x="3" y="5" width="12" height="14" rx="2"/><path d="M7 9v6M10 9v6M18 8a5 5 0 0 1 0 8M20.5 6a8.5 8.5 0 0 1 0 12"/>'),
     vigilance: svg('<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17.2v.3"/>'),
     autre: svg('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
@@ -44,10 +44,10 @@
   // ---------- Réglages (propres à cet appareil) ----------
   const PESSAC = { nom: 'Pessac', lat: 44.80565, lon: -0.6324, dep: '33' };
   function lireReglages() {
-    const r = { lieu: PESSAC, suivi: true, notifs: false, seuils: { ...C.SEUILS } };
+    const r = { lieu: PESSAC, suivi: true, notifs: false, seuils: { ...C.SEUILS }, carte: { radar: true, foudre: false, champ: null, cellules: false } };
     try {
       const s = JSON.parse(localStorage.getItem('ww-reglages-2'));
-      if (s && s.lieu && isFinite(s.lieu.lat) && isFinite(s.lieu.lon)) Object.assign(r, s, { seuils: { ...C.SEUILS, ...s.seuils } });
+      if (s && s.lieu && isFinite(s.lieu.lat) && isFinite(s.lieu.lon)) Object.assign(r, s, { seuils: { ...C.SEUILS, ...s.seuils }, carte: { ...r.carte, ...s.carte } });
     } catch (e) { /* stockage indisponible : réglages par défaut */ }
     return r;
   }
@@ -184,11 +184,11 @@
   };
 
   // ---------- Pages ----------
-  const RACINES = ['accueil', 'chasse', 'station', 'vigilance', 'autre'];
-  const TITRES = { chasse: 'Chasse orage', station: 'Station', vigilance: 'Vigilance', autre: 'Autre', graphiques: 'Graphiques',
+  const RACINES = ['accueil', 'carte', 'station', 'vigilance', 'autre'];
+  const TITRES = { carte: 'Cartes météo', station: 'Station', vigilance: 'Vigilance', autre: 'Autre', graphiques: 'Graphiques',
     pro: 'Prévision orage pro', convection: 'Convection HD', modeles: 'Modèles', fiabilite: 'Fiabilité', brief: 'Brief météo',
     alertes: 'Alertes', recherche: 'Rechercher un lieu' };
-  const NOMS_NAV = { accueil: 'Accueil', chasse: 'Chasse orage', station: 'Station', vigilance: 'Vigilance', autre: 'Autre' };
+  const NOMS_NAV = { accueil: 'Accueil', carte: 'Cartes météo', station: 'Station', vigilance: 'Vigilance', autre: 'Autre' };
   document.querySelectorAll('nav button').forEach(b => { b.innerHTML = ICO[b.dataset.page] + NOMS_NAV[b.dataset.page]; b.onclick = () => { location.hash = '#' + b.dataset.page; }; });
   $('#b-cloche').insertAdjacentHTML('afterbegin', ICO.cloche);
   $('#b-loupe').innerHTML = ICO.loupe;
@@ -199,21 +199,21 @@
 
   let page = 'accueil';
   function route() {
-    const p = location.hash.slice(1);
+    const p = location.hash.slice(1) === 'chasse' ? 'carte' : location.hash.slice(1);   // ancien nom
     page = p === 'accueil' || TITRES[p] ? p : 'accueil';
     document.querySelectorAll('.page').forEach(s => s.classList.toggle('on', s.id === `p-${page}`));
     const racine = RACINES.includes(page);
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.page === (racine ? page : 'accueil')));
-    document.body.classList.toggle('carte', page === 'chasse');
+    document.body.classList.toggle('carte', page === 'carte');
     $('#titre').textContent = page === 'accueil' ? R.lieu.nom : TITRES[page];
     const g = $('#b-gauche');
-    g.hidden = page === 'chasse';
+    g.hidden = page === 'carte';
     g.innerHTML = racine ? ICO.pos : ICO.retour;
     g.setAttribute('aria-label', racine ? 'Ma position' : 'Retour');
     g.onclick = racine ? () => suivre(true) : () => (history.length > 1 ? history.back() : (location.hash = '#accueil'));
-    $('#b-droite').hidden = !racine || page === 'chasse';
-    $('#b-centre').hidden = page !== 'chasse';
-    if (page === 'chasse') carte.init();
+    $('#b-droite').hidden = !racine || page === 'carte';
+    $('#b-centre').hidden = page !== 'carte';
+    if (page === 'carte') carte.init();
     window.scrollTo(0, 0);
     rendre();
   }
@@ -225,7 +225,7 @@
     if (!W && page !== 'autre' && page !== 'alertes') { el.innerHTML = '<div class="vide">Chargement…</div>'; return; }
     f(el);
   }
-  const rafraichir = () => { if (page === 'accueil') $('#titre').textContent = R.lieu.nom; majBadge(); rendre(); if (carte.map) carte.station(); };
+  const rafraichir = () => { if (page === 'accueil') $('#titre').textContent = R.lieu.nom; majBadge(); rendre(); carte.volet(); };
 
   // ---------- Morceaux communs ----------
   function scores(i, n) { const h = W.hourly, out = []; for (let k = i; k < Math.min(i + n, h.time.length); k++) out.push(riskScore(hourRisk(h, LPI, k))); return out; }
@@ -478,22 +478,58 @@
   };
 
   // ---------- Modèles ----------
+  const PARAMS = [['weather_code', 'Temps'], ['temperature_2m', 'Température', '°C', 1], ['apparent_temperature', 'Ressenti', '°C', 1],
+    ['precipitation', 'Pluie', 'mm/h', 1], ['precipitation_probability', 'Proba pluie', '%', 0], ['wind_speed_10m', 'Vent', 'km/h', 0],
+    ['wind_gusts_10m', 'Rafales', 'km/h', 0], ['cloud_cover', 'Nuages', '%', 0], ['relative_humidity_2m', 'Humidité', '%', 0],
+    ['pressure_msl', 'Pression', 'hPa', 0], ['cape', 'CAPE', 'J/kg', 0]];
+  let PARAM = 'temperature_2m';
+  // Valeurs quotidiennes d'un modèle, alignées sur les jours de la prévision « Auto ».
+  function serieJour(nom, mod, jours) {
+    if (mod === 'auto') return jours.map((_, k) => (W.daily[nom] ? W.daily[nom][k] : null));
+    const d = EXTRA.modeles.d.daily, v = d && d[`${nom}_${mod}`];
+    if (!v) return jours.map(() => null);
+    const pos = new Map(d.time.map((t, k) => [t, k]));
+    return jours.map(t => (pos.has(t) ? v[pos.get(t)] : null));
+  }
   RENDUS.modeles = el => {
     if (!attendre(el, ['modeles'], 'modeles')) return;
-    const i = nowIdx(), fin = Math.min(i + 48, W.hourly.time.length), times = W.hourly.time.slice(i, fin);
+    const i = nowIdx(), fin = Math.min(i + 48, W.hourly.time.length), times = W.hourly.time.slice(i, fin), jours = W.daily.time.slice(0, 7);
+    const J = MOD.map(([k]) => ({ code: serieJour('weather_code', k, jours), max: serieJour('temperature_2m_max', k, jours),
+      min: serieJour('temperature_2m_min', k, jours), pluie: serieJour('precipitation_sum', k, jours) }));
+    const accord = jours.map((_, d) => {
+      const tm = J.map(m => m.max[d]).filter(v => v != null), pl = J.map(m => m.pluie[d]).filter(v => v != null);
+      return tm.length ? `${pl.filter(v => v >= 1).length}/${pl.length} 🌧️<small>écart ${fmt(Math.max(...tm) - Math.min(...tm))}°</small>` : '–';
+    });
+    const cellule = (m, d) => (m.max[d] == null && m.code[d] == null ? '<td class="muted">–</td>'
+      : `<td><span class="ic">${m.code[d] != null ? weatherLabel(m.code[d])[0] : '·'}</span><br>${fmt(m.max[d])}°<small>${fmt(m.min[d])}°${m.pluie[d] >= 1 ? ` · ${fmt(m.pluie[d])} mm` : ''}</small></td>`);
     const somme = v => v.slice(0, 24).reduce((s, x) => s + (x || 0), 0), maxi = v => Math.max(...v.slice(0, 24).map(x => x ?? -1));
-    const temp = MOD.map(m => serie('temperature_2m', m[0], i, fin));
-    el.innerHTML = `<div class="card"><h3>Maintenant (${hm(W.hourly.time[i])})</h3><div class="tableau"><table>
-        <tr><th>Modèle</th><th>T °C</th><th>Rafales</th><th>CAPE</th><th>LI</th><th>Pluie 24 h</th><th>Proba max</th></tr>
-        ${MOD.map(([k, n, col]) => {
-          const v = nom => serie(nom, k, i, fin);
-          return `<tr><td><span class="pastille" style="background:${col}"></span> ${n}</td><td>${fmt(v('temperature_2m')[0], 1)}</td><td>${fmt(v('wind_gusts_10m')[0])}</td><td>${fmt(v('cape')[0])}</td>
-            <td>${fmt(v('lifted_index')[0], 1)}</td><td>${v('precipitation').length ? fmt(somme(v('precipitation')), 1) + ' mm' : '–'}</td><td>${v('precipitation_probability').length ? fmt(maxi(v('precipitation_probability'))) + ' %' : '–'}</td></tr>`;
-        }).join('')}
-        </table></div><div class="note">Auto = meilleur modèle choisi par Open-Meteo pour le lieu. AROME et AROME-HD ne couvrent que 2 jours.</div></div>
-      <div class="card"><h3>Température 48 h</h3>${Graph.chart({ times, series: MOD.map((m, k) => ({ vals: temp[k], color: m[2] })), label: libelleTemps, title: 'Température' })}
+    const valeur = (nom, k, d) => {
+      const v = serie(nom, k, i, fin)[0];
+      if (nom === 'weather_code') return v == null ? '–' : `<span style="font-size:20px">${weatherLabel(v)[0]}</span>`;
+      if (nom === 'wind_speed_10m') { const dir = serie('wind_direction_10m', k, i, fin)[0]; return `${fmt(v)}${dir != null ? ' ' + compass(dir) : ''}`; }
+      return fmt(v, d);
+    };
+    const [, nomP, uniteP, decP] = PARAMS.find(p => p[0] === PARAM);
+    const courbes = MOD.map(m => serie(PARAM, m[0], i, fin));
+    el.innerHTML = `
+      <div class="card"><h3>Temps par modèle (7 jours)</h3><div class="tableau"><table class="fixe jours">
+        <tr><th></th>${jours.map((t, k) => `<th style="text-align:center">${k ? jourCourt(t) + '.' : 'Auj.'}</th>`).join('')}</tr>
+        ${MOD.map(([, n, col], m) => `<tr><td style="text-align:left"><span class="pastille" style="background:${col}"></span> ${n}</td>${jours.map((_, d) => cellule(J[m], d)).join('')}</tr>`).join('')}
+        <tr><td style="text-align:left" class="muted">Accord</td>${accord.map(a => `<td class="muted" style="font-size:12px">${a}</td>`).join('')}</tr>
+      </table></div><div class="note">Icône, max et min, pluie du jour. « Accord » : nombre de modèles qui donnent au moins 1 mm, et écart des maximales. AROME et AROME-HD ne couvrent que 2 jours.</div></div>
+      <div class="card"><h3>Maintenant (${hm(W.hourly.time[i])})</h3><div class="tableau"><table class="fixe">
+        <tr><th></th>${MOD.map(([, n, col]) => `<th style="color:${col}">${n}</th>`).join('')}</tr>
+        ${PARAMS.map(([nom, label, u, d]) => `<tr><td>${label}${u ? ` <small class="muted">${u}</small>` : ''}</td>${MOD.map(([k]) => `<td>${valeur(nom, k, d)}</td>`).join('')}</tr>`).join('')}
+        <tr><td>Pluie 24 h <small class="muted">mm</small></td>${MOD.map(([k]) => { const v = serie('precipitation', k, i, fin); return `<td>${v.length ? fmt(somme(v), 1) : '–'}</td>`; }).join('')}</tr>
+        <tr><td>Proba max 24 h <small class="muted">%</small></td>${MOD.map(([k]) => { const v = serie('precipitation_probability', k, i, fin); return `<td>${v.length ? fmt(maxi(v)) : '–'}</td>`; }).join('')}</tr>
+      </table></div><div class="note">Auto = meilleur modèle choisi par Open-Meteo pour le lieu. AROME-HD ne donne pas l'icône du temps.</div></div>
+      <div class="card"><h3>Comparer un paramètre (48 h)</h3>
+        <div class="puces">${PARAMS.slice(1).map(([k, n]) => `<button data-param="${k}" class="${k === PARAM ? 'on' : ''}" style="${k === PARAM ? 'background:#0a84ff' : ''}">${n}</button>`).join('')}</div>
+        ${Graph.chart({ times, min: ['precipitation', 'precipitation_probability', 'cloud_cover', 'cape', 'wind_speed_10m', 'wind_gusts_10m'].includes(PARAM) ? 0 : undefined,
+          series: MOD.map((m, k) => ({ vals: courbes[k], color: m[2] })), label: libelleTemps, title: nomP })}
         <div class="legende">${MOD.map(m => `<span><span class="pastille" style="background:${m[2]}"></span> ${m[1]}</span>`).join('')}</div>
-        <div class="note">Écart max entre modèles : ${fmt(ecartMax(temp.filter(s => s.length)), 1)} °C.</div></div>`;
+        <div class="note">${nomP} en ${uniteP}. Écart max entre modèles : ${fmt(ecartMax(courbes.filter(c => c.length)), decP)} ${uniteP}.</div></div>`;
+    el.querySelectorAll('[data-param]').forEach(b => b.onclick = () => { PARAM = b.dataset.param; rendre(); });
   };
 
   // ---------- Fiabilité ----------
@@ -598,140 +634,188 @@
     form.onsubmit = ev => {
       ev.preventDefault();
       Object.keys(C.SEUILS).forEach(k => { const v = parseFloat(form.elements[k].value); if (isFinite(v)) R.seuils[k] = v; });
-      ecrire(); banniere('Seuils enregistrés.'); carte.rayon(); majFoudre();
+      ecrire(); banniere('Seuils enregistrés.'); carte.appliquer(); majFoudre();
     };
-    $('#b-defaut').onclick = () => { R.seuils = { ...C.SEUILS }; ecrire(); rendre(); carte.rayon(); };
+    $('#b-defaut').onclick = () => { R.seuils = { ...C.SEUILS }; ecrire(); rendre(); carte.appliquer(); };
   };
 
-  // ---------- Chasse orage (carte) ----------
+  // ---------- Cartes météo ----------
+  const CHAMPS = { temperature: ['🌡️', 'Température'], vent: ['💨', 'Vent'], nuages: ['☁️', 'Nuages'], cape: ['🔥', 'CAPE'], pression: ['🧭', 'Pression'] };
+  const tempCol = v => `hsl(${Math.round(240 - Math.max(0, Math.min(1, (v + 10) / 50)) * 240)},85%,50%)`;
+  const capeCol = v => (v == null || v < 100 ? null : v < 500 ? '#34c759' : v < 1000 ? '#ffcc00' : v < 2000 ? '#ff9500' : '#ff3b30');
+  const ventCol = v => (v < 20 ? '#1b6e2e' : v < 40 ? '#c79100' : v < 60 ? '#e07b00' : '#d70015');
+  const LEGENDES = {
+    temperature: `-10° <span class="degrade" style="background:linear-gradient(90deg,${[-10, 2.5, 15, 27.5, 40].map(tempCol).join(',')})"></span> 40°`,
+    vent: 'Rafales <span style="color:#3ec46d">●</span> &lt;20 <span style="color:#ffcc00">●</span> 20-40 <span style="color:#ff9500">●</span> 40-60 <span style="color:#ff453a">●</span> &gt;60 km/h',
+    nuages: '0 % <span class="degrade" style="background:linear-gradient(90deg,rgba(255,255,255,.2),rgba(86,96,110,.9))"></span> 100 %',
+    cape: 'CAPE <span style="color:#34c759">●</span> 100 <span style="color:#ffcc00">●</span> 500 <span style="color:#ff9500">●</span> 1000 <span style="color:#ff3b30">●</span> 2000 J/kg',
+    pression: 'Isobares en hPa (niveau de la mer)',
+  };
   const carte = {
-    map: null,
+    map: null, mode: null,
     init() {
       if (this.map) { setTimeout(() => this.map.invalidateSize(), 50); return; }
       const map = this.map = L.map('carte', { center: [R.lieu.lat, R.lieu.lon], zoom: 8, maxZoom: 13, zoomControl: false, preferCanvas: true });
-      L.tileLayer('/tuiles/osm/{z}/{x}/{y}.png', { maxZoom: 13, attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a> · Radar <a href="https://www.rainviewer.com">Rain Viewer</a> · Foudre <a href="https://www.blitzortung.org">Blitzortung</a>' }).addTo(map);
+      L.tileLayer('/tuiles/osm/{z}/{x}/{y}.png', { maxZoom: 13, attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a> · Radar <a href="https://www.rainviewer.com">Rain Viewer</a> · Foudre <a href="https://www.blitzortung.org">Blitzortung</a> · <a href="https://open-meteo.com">Open-Meteo</a>' }).addTo(map);
       map.attributionControl.setPrefix(false);
-      this.site = L.circleMarker([R.lieu.lat, R.lieu.lon], { radius: 8, color: '#fff', weight: 3, fillColor: '#0a84ff', fillOpacity: 1 }).addTo(map);
-      this.cercle = L.circle([R.lieu.lat, R.lieu.lon], { radius: R.seuils.rayon * 1000, color: '#0a84ff', weight: 1.5, dashArray: '6 6', fill: false, interactive: false }).addTo(map);
-      this.gF = L.layerGroup().addTo(map); this.gC = L.layerGroup().addTo(map); this.gV = L.layerGroup(); this.gK = L.layerGroup();
+      this.site = L.circleMarker([R.lieu.lat, R.lieu.lon], { radius: 7, color: '#fff', weight: 3, fillColor: '#0a84ff', fillOpacity: 1 }).addTo(map);
+      this.cercle = L.circle([R.lieu.lat, R.lieu.lon], { radius: R.seuils.rayon * 1000, color: '#0a84ff', weight: 1.5, dashArray: '6 6', fill: false, interactive: false });
+      this.gF = L.layerGroup(); this.gC = L.layerGroup(); this.gG = L.layerGroup();
       // Ajouté à la carte à la première image connue : sans elle, Leaflet demanderait une adresse vide
-      this.rLayer = L.tileLayer('/tuiles/radar/0/{z}/{x}/{y}.png', { opacity: 0.65, zIndex: 2, maxNativeZoom: 7, maxZoom: 13 });
-      this.couches = { foudre: [this.gF, this.gC], radar: [this.rLayer], vent: [this.gV], cape: [this.gK] };
-      this.frames = []; this.times = [null]; this.radarT = null; this.grille = null;
-      $('#pl-legende').innerHTML = '⚡ ' + AGE_BANDS.map(b => `<span><span class="pastille" style="background:${b[1]}"></span> ${b[2].replace(/ /g, '').replace('min', 'm')}</span>`).join('');
+      this.rLayer = L.tileLayer('/tuiles/radar/0/{z}/{x}/{y}.png', { opacity: 0.6, zIndex: 2, maxNativeZoom: 7, maxZoom: 13 });
+      this.frames = []; this.radarT = null; this.grille = null;
+      const btn = (k, t) => `<button data-c="${k}">${t}</button>`;
+      $('#couches').innerHTML = btn('radar', '🌧️ Radar') + btn('foudre', '⚡ Foudre') +
+        Object.entries(CHAMPS).map(([k, [ic, n]]) => btn(k, `${ic} ${n}`)).join('') + btn('info', 'ℹ️');
+      $('#couches').querySelectorAll('button').forEach(b => b.onclick = () => {
+        const k = b.dataset.c;
+        if (k === 'info') { $('#volet').hidden = !$('#volet').hidden; this.boutons(); this.volet(); return; }
+        if (k === 'radar' || k === 'foudre') R.carte[k] = !R.carte[k];
+        else R.carte.champ = R.carte.champ === k ? null : k;
+        ecrire(); this.appliquer();
+      });
+      $('#pl-etat').onclick = () => { $('#volet').hidden = !$('#volet').hidden; this.boutons(); this.volet(); };
       const cur = $('#curseur');
       cur.oninput = () => this.show(+cur.value);
       let timer = null;
       $('#play').onclick = e => {
         if (timer) { clearInterval(timer); timer = null; e.currentTarget.textContent = '▶'; return; }
         e.currentTarget.textContent = '⏸';
-        timer = setInterval(() => { cur.value = (+cur.value + 1) % this.times.length; this.show(+cur.value); }, 900);
+        timer = setInterval(() => { cur.value = (+cur.value + 1) % (+cur.max + 1); this.show(+cur.value); }, 900);
       };
-      document.querySelectorAll('.couches [data-couche]').forEach(b => b.onclick = () => {
-        const on = b.classList.toggle('on'); b.setAttribute('aria-pressed', on);
-        const c = b.dataset.couche;
-        if (c === 'info') { $('#info-carte').hidden = !on; this.info(); return; }
-        if (c === 'radar' && this.radarT == null) return;
-        (this.couches[c] || []).forEach(l => (on ? l.addTo(map) : map.removeLayer(l)));
-        if (c === 'vent' || c === 'cape') this.prevision();
-      });
-      $('#cape-h').oninput = () => this.prevision();
-      $('#b-rayon').onclick = () => {
-        const PAS = [10, 30, 50, 100];
-        R.seuils.rayon = PAS[(PAS.indexOf(R.seuils.rayon) + 1) % PAS.length]; ecrire(); this.rayon(); majFoudre();
-      };
-      this.rayon(); this.station(); this.majRadar();
+      this.appliquer(); this.majRadar();
       setInterval(() => this.majRadar(), 5 * 60000);
       setTimeout(() => map.invalidateSize(), 50);
     },
-    rayon() {
-      $('#b-rayon').textContent = `⌖ ${R.seuils.rayon}`;
-      if (this.cercle) this.cercle.setRadius(R.seuils.rayon * 1000);
+    boutons() {
+      $('#couches').querySelectorAll('button').forEach(b => {
+        const k = b.dataset.c;
+        b.classList.toggle('on', k === 'info' ? !$('#volet').hidden : k === 'radar' || k === 'foudre' ? !!R.carte[k] : R.carte.champ === k);
+      });
+    },
+    appliquer() {
+      if (!this.map) return;
+      const c = R.carte, map = this.map, met = (l, on) => { if (on && !map.hasLayer(l)) l.addTo(map); if (!on && map.hasLayer(l)) map.removeLayer(l); };
+      this.boutons();
+      met(this.rLayer, c.radar && this.radarT != null);
+      met(this.gF, c.foudre); met(this.gC, c.foudre && c.cellules); met(this.cercle, c.foudre && c.cellules);
+      met(this.gG, !!c.champ);
+      this.cercle.setRadius(R.seuils.rayon * 1000);
+      $('#pl-legende').hidden = !c.champ;
+      if (c.champ) $('#pl-legende').innerHTML = LEGENDES[c.champ];
+      const mode = c.champ ? 'prevision' : 'radar';           // un seul curseur : passé du radar, ou 24 h de prévision
+      if (mode !== this.mode) { this.mode = mode; this.regler(true); }
+      if (c.champ && !this.grille) this.chargerGrille(); else this.show(+$('#curseur').value);
+      this.volet();
+    },
+    regler(debut) {
+      const cur = $('#curseur'), n = this.mode === 'prevision' ? (this.grille ? this.grille.time.length : 1) : this.frames.length + 1;
+      cur.max = Math.max(0, n - 1);
+      if (debut) cur.value = this.mode === 'prevision' ? 0 : cur.max;
+    },
+    async chargerGrille() {
+      try { this.grille = await getJson(`/api/grille?${qs()}`); } catch (e) { banniere(`Grille indisponible : ${e.message}`); return; }
+      this.regler(true); this.show(+$('#curseur').value);
     },
     recentrer(garderZoom) {
       if (!this.map) return;
       const ll = [R.lieu.lat, R.lieu.lon];
       this.site.setLatLng(ll); this.cercle.setLatLng(ll);
       this.map.setView(ll, garderZoom ? this.map.getZoom() : 8);
-      this.grille = null; this.gV.clearLayers(); this.gK.clearLayers();
-      if (this.map.hasLayer(this.gV) || this.map.hasLayer(this.gK)) this.prevision();
+      this.grille = null; this.gG.clearLayers();
+      if (R.carte.champ) this.chargerGrille();
     },
     async majRadar() {
       const cur = $('#curseur');
       try {
-        const r = await getJson('/api/radar');
-        ETAT.radar = r;
-        const auBout = +cur.value >= this.times.length - 1;
-        this.frames = r.images; this.times = [...r.images.map(t => t * 1000), null];
-        cur.max = this.times.length - 1;
-        if (auBout) cur.value = cur.max;
+        const r = await getJson('/api/radar'), auBout = +cur.value >= +cur.max;
+        ETAT.radar = r; this.frames = r.images;
+        if (this.mode === 'radar') this.regler(auBout);
       } catch (e) { ETAT.radar = { erreur: e.message, images: [] }; }
       this.show(+cur.value);
     },
+    radar(f) {
+      if (f == null || f === this.radarT) return;
+      this.rLayer.setUrl(`/tuiles/radar/${f}/{z}/{x}/{y}.png`);
+      const premier = this.radarT == null;
+      this.radarT = f;
+      if (premier && R.carte.radar) this.rLayer.addTo(this.map);
+    },
     show(k) {
       if (!this.map) return;
-      const T = this.times[k] ?? maintenant(), isNow = k >= this.times.length - 1, map = this.map;
-      const f = this.frames[Math.min(k, this.frames.length - 1)];
-      if (f != null && f !== this.radarT) {
-        this.rLayer.setUrl(`/tuiles/radar/${f}/{z}/{x}/{y}.png`);
-        if (this.radarT == null && $('[data-couche=radar]').classList.contains('on')) this.rLayer.addTo(map);
-        this.radarT = f;
+      const c = R.carte;
+      let T = maintenant(), libelle = '…', isNow = true;
+      if (this.mode === 'radar') {
+        isNow = k >= this.frames.length;
+        if (!isNow) T = this.frames[k] * 1000;
+        this.radar(this.frames[Math.min(k, this.frames.length - 1)]);
+        libelle = hhmm(T);
+      } else {
+        this.radar(this.frames[this.frames.length - 1]);
+        if (this.grille) { const h = Math.min(k, this.grille.time.length - 1); libelle = `${this.grille.time[h].slice(11, 16)}${h ? ` +${h}h` : ''}`; this.champ(h); }
       }
+      $('#curseur-t').textContent = libelle;
       this.gF.clearLayers(); this.gC.clearLayers();
       const vis = C.visibleAt(STRIKES, T);
-      vis.forEach(s => L.circleMarker([s.lat, s.lon], { radius: 5, weight: 1, color: '#fff', fillColor: ageColor(s.age), fillOpacity: 0.95, interactive: false }).addTo(this.gF));
-      const cl = C.cells(vis);
-      cl.forEach(c => {
-        const col = ageColor(c.age);
-        L.circle([c.lat, c.lon], { radius: Math.min(25000, 6000 + 1500 * Math.sqrt(c.n)), color: col, weight: 2, fillColor: col, fillOpacity: 0.12, interactive: false }).addTo(this.gC);
-        L.marker([c.lat, c.lon], { interactive: false, icon: L.divIcon({ className: '', html: `<div class="cellule">⛈️<br><b>${c.n}</b></div>`, iconSize: [40, 44], iconAnchor: [20, 22] }) }).addTo(this.gC);
-      });
+      if (c.foudre) {
+        vis.forEach(s => L.circleMarker([s.lat, s.lon], { radius: 3, weight: 0.5, color: '#fff', fillColor: ageColor(s.age), fillOpacity: 0.9, interactive: false }).addTo(this.gF));
+        if (c.cellules) C.cells(vis).forEach(cl => {
+          const col = ageColor(cl.age);
+          L.circle([cl.lat, cl.lon], { radius: Math.min(25000, 6000 + 1500 * Math.sqrt(cl.n)), color: col, weight: 1.5, fillColor: col, fillOpacity: 0.1, interactive: false }).addTo(this.gC);
+          L.marker([cl.lat, cl.lon], { interactive: false, icon: L.divIcon({ className: '', html: `<div class="cellule">⛈️<br><b>${cl.n}</b></div>`, iconSize: [34, 38], iconAnchor: [17, 19] }) }).addTo(this.gC);
+        });
+      }
       const near = C.nearest(vis, R.lieu.lat, R.lieu.lon, 0, 60), ok = ETAT.foudre && ETAT.foudre.connecte;
-      $('#pl-flux').innerHTML = `<span class="pastille" style="background:${ok ? '#34c759' : '#ff3b30'}"></span> Flux foudre<span class="sep"></span>⚡ ${vis.length}<span class="sep"></span>🌩️ ${cl.length}<span class="sep"></span>
-        <span style="color:${near && near.km < R.seuils.rayon ? '#ff6b6b' : '#fff'}">${near ? fmt(near.km) + ' km' : '–'}</span>`;
-      $('#curseur-t').textContent = hhmm(isNow ? maintenant() : T);
-      const ap = isNow ? C.approach(vis, R.lieu.lat, R.lieu.lon, R.seuils.rayon * 2) : null;
+      const nom = c.champ ? CHAMPS[c.champ].join(' ') : c.radar ? '🌧️ Radar' : '🗺️ Carte';
+      $('#pl-etat').innerHTML = `${nom} · ${esc(libelle)}${c.foudre ? `<span class="sep"></span><span class="pastille" style="background:${ok ? '#34c759' : '#ff3b30'}"></span>⚡ ${vis.filter(s => s.age < 60).length}${near ? ` · ${fmt(near.km)} km` : ''}` : ''}`;
+      // L'alerte d'approche reste visible même sans la couche foudre : c'est une sécurité
+      const ap = isNow ? C.approach(C.visibleAt(STRIKES, maintenant()), R.lieu.lat, R.lieu.lon, R.seuils.rayon * 2) : null;
       $('#pl-approche').hidden = !ap;
       if (ap) {
         $('#pl-approche').textContent = `⚠️ Orage à ${fmt(ap.km)} km (${compass(ap.bearing)}), il se rapproche`;
         if (Date.now() - dejaNotifie.approche > 30 * 60000) { dejaNotifie.approche = Date.now(); notifier('Orage en approche', `À ${fmt(ap.km)} km au ${compass(ap.bearing)}, il se rapproche.`); }
       }
     },
-    station() {
-      if (!W) return;
-      const c = W.current, i = nowIdx(), sc = riskScore(hourRisk(W.hourly, LPI, i)), lv = riskLevel(sc), p = pic(i, 24);
-      $('#pl-risque').innerHTML = `☁️ Risque ${lv.label.toLowerCase()} <b style="color:${lv.color}">${sc}%</b> <span style="opacity:.7">· ${hh(W.hourly.time[p.i])} h</span>`;
-      $('#station').innerHTML = `<div class="row"><b style="font-size:18px">➤ ${esc(R.lieu.nom)}</b><span class="sp"></span><span style="opacity:.6">${hm(c.time)}</span></div>
-        <div class="row"><div class="chips"><span>🌡️ ${fmt(c.temperature_2m)}°</span><span>💨 ${fmt(c.wind_speed_10m)} ${compass(c.wind_direction_10m)}</span>
-        ${c.wind_gusts_10m >= 25 ? `<span>🌬️ ${fmt(c.wind_gusts_10m)}</span>` : ''}<span>☁️ ${fmt(c.cloud_cover)}%</span>${W.hourly.cape[i] >= 100 ? `<span>⚡ ${fmt(W.hourly.cape[i])}</span>` : ''}</div>
-        <div class="note-r" style="color:${lv.color}">${sc}%<small>${lv.label}</small></div></div>`;
+    champ(k) {
+      this.gG.clearLayers();
+      const g = this.grille, ch = R.carte.champ;
+      if (!g || !ch) return;
+      const n = g.lons.length, dla = (g.lats[1] - g.lats[0]) / 2, dlo = (g.lons[1] - g.lons[0]) / 2;
+      const rect = (la, lo, col, op) => L.rectangle([[la - dla, lo - dlo], [la + dla, lo + dlo]], { stroke: false, fillColor: col, fillOpacity: op, interactive: false }).addTo(this.gG);
+      const etiquette = (la, lo, html, cls = 'val', couleur = '') => L.marker([la, lo], { interactive: false, icon: L.divIcon({ className: '', iconSize: [40, 30], iconAnchor: [20, 15], html: `<div class="${cls}" style="color:${couleur}">${html}</div>` }) }).addTo(this.gG);
+      if (ch === 'pression') {
+        const v = g.pression[k];
+        C.niveauxIso(v).forEach(niv => {
+          const segs = C.isolignes(v, g.lats, g.lons, niv);
+          segs.forEach(sg => L.polyline(sg, { color: '#1d3d8f', weight: 1.6, interactive: false }).addTo(this.gG));
+          if (segs.length) { const m = segs[Math.floor(segs.length / 2)][0]; etiquette(m[0], m[1], `<span class="iso">${niv}</span>`, ''); }
+        });
+        return;
+      }
+      g.lats.forEach((la, li) => g.lons.forEach((lo, co) => {
+        const p = li * n + co, pair = li % 2 === 0 && co % 2 === 0;
+        if (ch === 'temperature') { const v = g.temperature[k][p]; if (v == null) return; rect(la, lo, tempCol(v), 0.3); if (pair) etiquette(la, lo, `${fmt(v)}°`); }
+        else if (ch === 'nuages') { const v = g.nuages[k][p]; if (v == null) return; if (v >= 10) rect(la, lo, '#56606e', v / 100 * 0.5); if (li % 3 === 1 && co % 3 === 1) etiquette(la, lo, `${fmt(v)}%`); }
+        else if (ch === 'cape') { const v = g.cape[k][p], col = capeCol(v); if (col) rect(la, lo, col, 0.35); }
+        else if (ch === 'vent') {
+          const s = g.vent[k][p], d = g.direction[k][p];
+          if (pair && s != null && d != null) etiquette(la, lo, `<div style="transform:rotate(${d + 180}deg);font-size:18px">↑</div>${fmt(s)}`, 'fleche', ventCol(g.rafales[k][p] ?? s));
+        }
+      }));
     },
-    async prevision() {
-      const map = this.map, vent = map.hasLayer(this.gV), cape = map.hasLayer(this.gK);
-      $('#lect-cape').hidden = !vent && !cape;
-      this.gV.clearLayers(); this.gK.clearLayers();
-      if (!vent && !cape) return;
-      try { this.grille = this.grille || await getJson(`/api/grille?${qs()}`); } catch (e) { banniere(`Grille indisponible : ${e.message}`); return; }
-      const g = this.grille, ch = $('#cape-h'); ch.max = g.time.length - 1;
-      const k = Math.min(+ch.value, g.time.length - 1), n = g.lons.length;
-      const dla = (g.lats[1] - g.lats[0]) / 2, dlo = (g.lons[1] - g.lons[0]) / 2;
-      const capeCol = v => (v == null || v < 100 ? null : v < 500 ? '#34c759' : v < 1000 ? '#ffcc00' : v < 2000 ? '#ff9500' : '#ff3b30');
-      const ventCol = v => (v < 20 ? '#1b6e2e' : v < 40 ? '#c79100' : v < 60 ? '#e07b00' : '#d70015');
-      g.cape[k].forEach((v, p) => {
-        const li = Math.floor(p / n), co = p % n, la = g.lats[li], lo = g.lons[co];
-        if (cape && capeCol(v)) L.rectangle([[la - dla, lo - dlo], [la + dla, lo + dlo]], { stroke: false, fillColor: capeCol(v), fillOpacity: 0.35, interactive: false }).addTo(this.gK);
-        const s = g.vent[k][p], d = g.direction[k][p];
-        if (vent && s != null && d != null && li % 2 === 0 && co % 2 === 0)   // un point sur deux : lisible
-          L.marker([la, lo], { interactive: false, icon: L.divIcon({ className: '', iconSize: [30, 34], iconAnchor: [15, 17],
-            html: `<div class="fleche" style="color:${ventCol(g.rafales[k][p] ?? s)}"><div style="transform:rotate(${d + 180}deg);font-size:20px">↑</div>${fmt(s)}</div>` }) }).addTo(this.gV);
-      });
-      $('#cape-t').textContent = `${g.time[k].slice(11, 16)}${k ? ` +${k}h` : ''}`;
-    },
-    info() {
-      $('#info-carte').innerHTML = `<b>Impacts</b> : couleur = ancienneté (violet < 5 min … bleu 1-2 h). <b>Cellules</b> : impacts de moins de 30 min regroupés par carreaux d'environ 20 km.
-        <b>Cercle pointillé</b> : rayon « orage actif proche » (bouton ⌖). <b>Radar</b> : Rain Viewer, images des 2 dernières heures.<br>
-        <b>CAPE</b> (🔥) : vert 100-500, jaune 500-1000, orange 1000-2000, rouge > 2000 J/kg. <b>Vent</b> (💨) : flèche = sens, chiffre = km/h, couleur = rafales.
-        Grille de 15×15 points Open-Meteo, curseur « Prévi. » sur 24 h.<br>Foudre : Blitzortung.org (réseau communautaire, couverture non garantie).`;
+    volet() {
+      const el = $('#volet');
+      if (!this.map || el.hidden || !W) return;
+      const c = W.current, i = nowIdx(), sc = riskScore(hourRisk(W.hourly, LPI, i)), lv = riskLevel(sc), f = ETAT.foudre;
+      el.innerHTML = `<h4>📍 ${esc(R.lieu.nom)} · ${hm(c.time)}</h4>
+        <div>🌡️ ${fmt(c.temperature_2m)}° · 💨 ${fmt(c.wind_speed_10m)} km/h ${compass(c.wind_direction_10m)} · rafales ${fmt(c.wind_gusts_10m)} · ☁️ ${fmt(c.cloud_cover)} % · risque d'orage <b style="color:${lv.color}">${sc} %</b></div>
+        <h4>⚡ Foudre <span class="muted" style="font-weight:400">· ${f && f.connecte ? 'flux connecté' : 'flux déconnecté'}</span></h4>
+        <div class="legende">${AGE_BANDS.map(b => `<span><span class="pastille" style="background:${b[1]}"></span> ${b[2]}</span>`).join('')}</div>
+        <label class="row" style="margin-top:8px">Cellules et rayon d'alerte<input type="checkbox" class="interrupteur" id="v-cell" ${R.carte.cellules ? 'checked' : ''}></label>
+        <div class="rayons">Rayon : ${[10, 30, 50, 100].map(r => `<button data-r="${r}" class="${R.seuils.rayon === r ? 'on' : ''}">${r} km</button>`).join('')}</div>
+        <h4>Sources</h4><div class="muted">Radar Rain Viewer (2 h d'images) · foudre Blitzortung (communautaire) · grilles Open-Meteo 15×15 points sur ~150 km · fond © OpenStreetMap.</div>`;
+      $('#v-cell').onchange = e => { R.carte.cellules = e.target.checked; if (e.target.checked) R.carte.foudre = true; ecrire(); this.appliquer(); };
+      el.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { R.seuils.rayon = +b.dataset.r; ecrire(); this.appliquer(); majFoudre(); });
     },
   };
 

@@ -24,33 +24,21 @@
 </header>
 <div id="banniere" role="status" hidden></div>
 
-<section id="p-chasse" class="page" aria-label="Chasse orage">
+<section id="p-carte" class="page" aria-label="Cartes météo">
   <div id="carte"></div>
   <div class="sur haut">
-    <div class="pilule" id="pl-flux">…</div>
-    <div class="pilule leg" id="pl-legende"></div>
-    <div class="pilule" id="pl-risque"></div>
+    <button class="pilule" id="pl-etat" aria-label="Afficher le détail">…</button>
+    <div class="pilule leg" id="pl-legende" hidden></div>
     <div class="pilule alerte-carte" id="pl-approche" role="alert" hidden></div>
   </div>
   <div class="sur bas">
-    <div class="info-carte" id="info-carte" hidden></div>
-    <div class="station" id="station"></div>
-    <div class="lecteur" id="lect-cape" hidden>
-      <span>Prévi.</span><input type="range" id="cape-h" min="0" max="0" value="0" aria-label="Heure de prévision (CAPE, vent)"><span id="cape-t">…</span>
-    </div>
+    <div class="volet" id="volet" hidden></div>
     <div class="lecteur">
       <button id="play" aria-label="Lecture">▶</button>
-      <input type="range" id="curseur" min="0" max="0" value="0" aria-label="Temps du radar et de la foudre">
+      <input type="range" id="curseur" min="0" max="0" value="0" aria-label="Temps">
       <span id="curseur-t">…</span>
     </div>
-    <div class="couches">
-      <button data-couche="foudre" class="c-foudre on" aria-pressed="true" aria-label="Impacts de foudre">⚡</button>
-      <button data-couche="radar" class="c-radar on" aria-pressed="true" aria-label="Radar de pluie">🌧️</button>
-      <button data-couche="vent" class="c-vent" aria-pressed="false" aria-label="Vent prévu">💨</button>
-      <button data-couche="cape" class="c-cape" aria-pressed="false" aria-label="CAPE prévue">🔥</button>
-      <button data-couche="info" class="c-info" aria-pressed="false" aria-label="Légende et sources">ℹ️</button>
-      <button class="rayon" id="b-rayon" aria-label="Rayon d'alerte">⌖ 30</button>
-    </div>
+    <div class="couches" id="couches"></div>
   </div>
 </section>
 
@@ -77,7 +65,7 @@
 
 <nav>
   <button data-page="accueil" aria-label="Accueil"></button>
-  <button data-page="chasse" aria-label="Chasse orage"></button>
+  <button data-page="carte" aria-label="Cartes météo"></button>
   <button data-page="station" aria-label="Station"></button>
   <button data-page="vigilance" aria-label="Vigilance"></button>
   <button data-page="autre" aria-label="Autre"></button>

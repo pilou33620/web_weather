@@ -74,8 +74,11 @@ QUOTIDIEN = ("weather_code,temperature_2m_max,temperature_2m_min,precipitation_s
              "precipitation_probability_max,wind_gusts_10m_max,sunrise,sunset,uv_index_max")
 MODELES = ("ecmwf_ifs025,gfs_seamless,icon_seamless,meteofrance_arome_france,"
            "meteofrance_arome_france_hd,meteofrance_arpege_europe")
-MODELES_HORAIRE = ("temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,"
+MODELES_HORAIRE = ("temperature_2m,apparent_temperature,weather_code,precipitation,precipitation_probability,"
+                   "wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,relative_humidity_2m,pressure_msl,"
                    "cape,lifted_index")
+MODELES_QUOTIDIEN = ("weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,"
+                     "precipitation_probability_max,wind_gusts_10m_max")
 
 GRILLE_N = 15                 # 15×15 points…
 GRILLE_KM = 150               # …sur environ 150 km : 225 appels par heure et par lieu
@@ -182,7 +185,7 @@ def meteo(lat, lon):
 def modeles(lat, lon):
     return en_cache(("modeles", lat, lon), 1800, lambda: json_de(
         OM, latitude=lat, longitude=lon, timezone="auto", forecast_days=7, wind_speed_unit="kmh",
-        models=MODELES, hourly=MODELES_HORAIRE))
+        models=MODELES, hourly=MODELES_HORAIRE, daily=MODELES_QUOTIDIEN))
 
 
 def convection(lat, lon):
@@ -217,13 +220,14 @@ def points_grille(lat, lon):
 
 
 def grille(lat, lon):
-    """CAPE et vent des 24 prochaines heures sur la grille : cape[h][i * N + j] (i : latitude, j : longitude)."""
+    """Champs des 24 prochaines heures sur la grille : cape[h][i * N + j] (i : latitude, j : longitude)."""
     def calcul():
         lats, lons = points_grille(lat, lon)
         pts = [(a, b) for a in lats for b in lons]
         rep = json_de(OM, latitude=",".join(str(a) for a, _ in pts),
                       longitude=",".join(str(b) for _, b in pts),
-                      hourly="cape,wind_speed_10m,wind_direction_10m,wind_gusts_10m", forecast_days=2,
+                      hourly="cape,wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,cloud_cover,"
+                             "pressure_msl", forecast_days=2,
                       wind_speed_unit="kmh", timezone="auto")
         decalage = timedelta(seconds=rep[0]["utc_offset_seconds"])
         maintenant = (datetime.now(timezone.utc) + decalage).strftime("%Y-%m-%dT%H:00")
@@ -233,7 +237,8 @@ def grille(lat, lon):
         champ = lambda nom: [[p["hourly"][nom][k] for p in rep] for k in range(debut, fin)]
         return {"lats": lats, "lons": lons, "time": heures[debut:fin], "cape": champ("cape"),
                 "vent": champ("wind_speed_10m"), "direction": champ("wind_direction_10m"),
-                "rafales": champ("wind_gusts_10m")}
+                "rafales": champ("wind_gusts_10m"), "temperature": champ("temperature_2m"),
+                "nuages": champ("cloud_cover"), "pression": champ("pressure_msl")}
     return en_cache(("grille", lat, lon), 3600, calcul)
 
 

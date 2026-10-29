@@ -2,6 +2,7 @@
 //   python3 serveur.py --local --sans-maj --sans-navigateur --port 8893 &
 //   node test/rendu_pages.js http://127.0.0.1:8893
 // Affiche un bilan court : erreurs JavaScript, « undefined » ou « NaN » dans le HTML produit.
+// CHAMP=temperature|vent|nuages|cape|pression : dessine aussi cette couche de la carte avec la vraie grille.
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:8893';
 const racine = path.join(__dirname, '..');
@@ -16,8 +17,8 @@ function element(sel) {
   }
   return elements.get(sel);
 }
-const navBoutons = ['accueil', 'chasse', 'station', 'vigilance', 'autre'].map(p => ({ ...element('nav-' + p), dataset: { page: p } }));
-const pages = ['accueil', 'chasse', 'station', 'vigilance', 'autre', 'graphiques', 'pro', 'convection', 'modeles', 'fiabilite', 'brief', 'alertes', 'recherche'];
+const navBoutons = ['accueil', 'carte', 'station', 'vigilance', 'autre'].map(p => ({ ...element('nav-' + p), dataset: { page: p } }));
+const pages = ['accueil', 'carte', 'station', 'vigilance', 'autre', 'graphiques', 'pro', 'convection', 'modeles', 'fiabilite', 'brief', 'alertes', 'recherche'];
 const chaine = () => new Proxy(function () {}, { get: (_, k) => (k === 'then' ? undefined : chaine()), apply: () => chaine() });
 let hashListener = null;
 const erreurs = [];
@@ -31,7 +32,9 @@ const ctx = {
   },
   location: { hash: '#accueil', reload() {} },
   history: { length: 1, back() {}, replaceState() {} },
-  localStorage: { getItem: () => null, setItem() {} },
+  // CHAMP=pression node test/rendu_pages.js … : la carte s'ouvre avec cette couche, la foudre et les cellules
+  localStorage: { getItem: () => (process.env.CHAMP ? JSON.stringify({ lieu: { nom: 'Pessac', lat: 44.80565, lon: -0.6324, dep: '33' },
+    carte: { radar: true, foudre: true, cellules: true, champ: process.env.CHAMP } }) : null), setItem() {} },
   navigator: {},
   fetch: (url) => fetch(BASE + url),
   window: null,
@@ -54,7 +57,7 @@ const attendre = ms => new Promise(r => setTimeout(r, ms));
     const html = element('#p-' + p).innerHTML;
     const bad = (html.match(/undefined|NaN|\[object Object\]/g) || []);
     if (bad.length) erreurs.push(`${p} : ${bad.length} × « ${bad[0]} » dans le HTML (${html.slice(Math.max(0, html.indexOf(bad[0]) - 80), html.indexOf(bad[0]) + 20).replace(/\s+/g, ' ')})`);
-    if (!['chasse', 'recherche', 'alertes'].includes(p) && html.length < 200) erreurs.push(`${p} : page presque vide (${html.replace(/\s+/g, ' ').slice(0, 120)})`);
+    if (!['carte', 'recherche', 'alertes'].includes(p) && html.length < 200) erreurs.push(`${p} : page presque vide (${html.replace(/\s+/g, ' ').slice(0, 120)})`);
   }
   console.log(erreurs.length ? erreurs.join('\n') + `\nECHEC : ${erreurs.length} problème(s)` : `OK : ${pages.length} pages rendues sans erreur`);
   process.exit(erreurs.length ? 1 : 0);

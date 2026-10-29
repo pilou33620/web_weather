@@ -159,6 +159,13 @@ Référence : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md`, appliqué tel quel :
 - Notifications : cloche dans la page + notification du navigateur (service worker minimal `sw.js`, aucun cache hors ligne). Pas de Web Push appli fermée (demanderait une dépendance de chiffrement).
 - Nouvelle alerte « Pluies fortes » (≥ 10 mm/h) ; rayon « orage actif proche » 30 km par défaut (10/30/50/100).
 
+## 8 ter. Version 2.1 (2026-10-29)
+
+- L'onglet « Chasse orage » devient **Cartes météo**, généraliste : radar et foudre (en option, petits points, cellules et rayon sur demande), plus une seule couche de prévision à la fois sur 24 h (température, vent, nuages, CAPE, pression avec isobares par carrés marchants). Un seul curseur : passé du radar, ou heures de prévision quand une couche est active. Volet repliable pour le détail.
+- La grille 15×15 ajoute température, nuages et pression au même appel (7 variables, sous la limite de 10 par appel).
+- Page Modèles : temps quotidien par modèle sur 7 jours (`daily` multi-modèles), 11 paramètres horaires par modèle, comparaison d'un paramètre.
+- Correction : `[hidden]` l'emporte sur les `display` des classes (éléments masqués qui s'affichaient).
+
 ## 9. Questions ouvertes
 
 Toutes les questions de la v0.1 sont tranchées (section 7). Restent les points non vérifiés de la section 8.

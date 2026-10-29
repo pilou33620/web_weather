@@ -243,8 +243,36 @@
   }
   const niveauRisque = pc => (pc < 15 ? 'Faible' : pc < 40 ? 'Modéré' : pc < 70 ? 'Élevé' : 'Très élevé');
 
+  // ---- Isobares : lignes de niveau sur la grille (carrés marchants) ----
+  // vals[i * n + j] (i : latitude, j : longitude) -> segments [[lat, lon], [lat, lon]] au niveau donné.
+  function isolignes(vals, lats, lons, niveau) {
+    const n = lons.length, segs = [], V = (i, j) => vals[i * n + j];
+    for (let i = 0; i < lats.length - 1; i++) {
+      for (let j = 0; j < n - 1; j++) {
+        const coins = [[i, j], [i, j + 1], [i + 1, j + 1], [i + 1, j]], pts = [];
+        for (let e = 0; e < 4; e++) {
+          const [ia, ja] = coins[e], [ib, jb] = coins[(e + 1) % 4], a = V(ia, ja), b = V(ib, jb);
+          if (a == null || b == null || (a < niveau) === (b < niveau)) continue;
+          const t = (niveau - a) / (b - a);
+          pts.push([lats[ia] + (lats[ib] - lats[ia]) * t, lons[ja] + (lons[jb] - lons[ja]) * t]);
+        }
+        if (pts.length === 2) segs.push(pts);
+        else if (pts.length === 4) segs.push([pts[0], pts[1]], [pts[2], pts[3]]);   // col : coupe arbitraire
+      }
+    }
+    return segs;
+  }
+  // Niveaux ronds : tous les 1 hPa sur une petite zone calme, 2 ou 4 hPa si la pression varie plus.
+  function niveauxIso(vals) {
+    const v = vals.filter(x => x != null);
+    if (!v.length) return [];
+    const mn = Math.min(...v), mx = Math.max(...v), pas = mx - mn <= 4 ? 1 : mx - mn <= 12 ? 2 : 4, out = [];
+    for (let x = Math.ceil(mn / pas) * pas; x <= mx; x += pas) out.push(x);
+    return out;
+  }
+
   const api = { clamp, haversineKm, bearingDeg, compass, AGE_BANDS, ageColor, SEUILS, riskScore, riskLevel,
     alignLpi, hourRisk, alertWindows, VIGI, vigilance, quantile, bands, rainProb, visibleAt, nearest, cells,
-    approach, weatherLabel, dans, activite, indices, LECTURE, typeOrage, risques, niveauRisque };
+    approach, weatherLabel, dans, activite, indices, LECTURE, typeOrage, risques, niveauRisque, isolignes, niveauxIso };
   if (typeof module !== 'undefined') module.exports = api; else root.Calc = api;
 })(typeof window !== 'undefined' ? window : globalThis);

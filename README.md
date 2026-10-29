@@ -8,8 +8,9 @@ Interface claire façon iOS : barre du haut (position, lieu, alertes, recherche)
   - **Graphiques** : 24 h / 48 h / 72 h / 7 j, modèles à comparer, analyse orageuse (jauge, heures les plus à risque), température, pluie et probabilité, vent, nuages par étage.
   - **Analyse orage pro** : pic prévu, type d'orage, discussion technique, risques (grêle, vent, tornade, foudre), indices K, TT, SCP, STP, EHI, LCL, cisaillements, SRH (approchée).
   - **Convection HD** : AROME-HD par quart d'heure sur 12 h (pluie, CAPE, rafales, LPI).
-  - **Modèles**, **Fiabilité** (Ensemble ICON 40 membres), **Brief météo** (synthèse par thème, confiance, sources).
-- **Chasse orage** : carte avec radar (RainViewer), impacts de foudre en temps réel (Blitzortung), cellules, distance, rayon d'alerte, alerte d'approche, couches vent et CAPE prévues.
+  - **Modèles** : temps par modèle sur 7 jours (icône, min, max, pluie, accord), 11 paramètres à l'heure actuelle pour 7 modèles, courbes d'un paramètre au choix.
+  - **Fiabilité** (Ensemble ICON 40 membres), **Brief météo** (synthèse par thème, confiance, sources).
+- **Cartes météo** : radar de pluie (RainViewer) et foudre en temps réel (Blitzortung) en option, plus une couche de prévision au choix sur 24 h : température, vent et rafales, nuages, CAPE, pression avec isobares. Écran sobre : une pilule d'état, un curseur, les couches ; le détail (station, légende foudre, cellules, rayon d'alerte) s'ouvre d'un appui.
 - **Station** : valeurs du point et tableau 24 h. **Vigilance** : officielle Météo-France si la clé est posée, sinon indicative. **Autre** : suivi de position, notifications, seuils, état des sources.
 - **Cloche** : alertes en cours ; notifications du navigateur quand un orage est proche (appli ouverte ou en arrière-plan).
 
