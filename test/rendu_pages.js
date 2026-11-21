@@ -1,5 +1,5 @@
 // Rendu de chaque page de js/app.js dans un faux DOM, avec les vraies réponses d'un serveur lancé à part.
-//   python3 serveur.py --local --sans-maj --sans-navigateur --port 8893 &
+//   sh lancer.sh --local --sans-maj --sans-navigateur --port 8893 &
 //   node test/rendu_pages.js http://127.0.0.1:8893
 // Affiche un bilan court : erreurs JavaScript, « undefined » ou « NaN » dans le HTML produit.
 // CHAMP=temperature|vent|nuages|cape|pression : dessine aussi cette couche de la carte avec la vraie grille.

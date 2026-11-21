@@ -33,15 +33,18 @@ Budget Open-Meteo : environ 5 400 appels par jour pour la grille d'un lieu (225 
 
 ## Installation
 
-Python 3.8 ou plus, bibliothèque standard seulement (aucun `pip install`).
+Le serveur est un exécutable Rust. Rust n'est pas nécessaire : sans `cargo`, `lancer.sh` télécharge
+l'exécutable du poste (publication « binaires », compilée par la CI à chaque envoi sur `main`,
+vérifiée par son empreinte SHA-256). Avec `cargo`, il est compilé sur place.
 
 ```sh
 git clone https://github.com/pilou33620/web_weather.git
 cd web_weather
-python3 serveur.py
+sh lancer.sh                # Raspberry Pi, Linux, macOS
 ```
 
-Windows : double-clic sur `serveur.py`. Termux : `pkg install python git openssl`, puis la même commande.
+Windows : double-clic sur `lancer.bat`. Exécutables publiés : Linux x86_64 et aarch64 (Raspberry Pi),
+macOS aarch64, Windows x86_64.
 
 ## Options
 
@@ -63,11 +66,11 @@ Windows : double-clic sur `serveur.py`. Termux : `pkg install python git openssl
 
 La position automatique et les notifications exigent le HTTPS : utiliser l'adresse **Réseau** (pas `http://` en clair). Sur iPhone, « Sur l'écran d'accueil » permet les notifications.
 
-Sans `--local`, le serveur écoute sur le réseau local et sur Tailscale, et affiche l'adresse **Réseau** et un **code d'appairage** à 6 chiffres. Ouvrir cette adresse sur le téléphone puis entrer le code une fois. L'appairage, le jeton et le HTTPS local sont communs à tous les web tools (`appairage.py`, copie de `web_suite/lanceur/appairage.py`). Pour éviter l'alerte du navigateur, installer l'autorité locale proposée sur `/appairage/ca.pem`. Ne jamais exposer le port sur Internet.
+Sans `--local`, le serveur écoute sur le réseau local et sur Tailscale, et affiche l'adresse **Réseau** et un **code d'appairage** à 6 chiffres. Ouvrir cette adresse sur le téléphone puis entrer le code une fois. L'appairage, le jeton et le HTTPS local sont communs à tous les web tools (caisse `web_tools_commun` du dépôt web_suite). Pour éviter l'alerte du navigateur, installer l'autorité locale proposée sur `/appairage/ca.pem`. Ne jamais exposer le port sur Internet.
 
 ## web_launcher
 
-Entrée à ajouter dans `web_launcher/outils.json` :
+Entrée de `web_launcher/outils.json` (l'ancienne, `{python} serveur.py …`, marche aussi : le launcher lance `lancer.sh` quand `serveur.py` n'existe plus) :
 
 ```json
 {
@@ -80,14 +83,14 @@ Entrée à ajouter dans `web_launcher/outils.json` :
   "depot": "https://github.com/pilou33620/web_weather.git",
   "dossiers": ["web_weather"],
   "port": 8792,
-  "commande": ["{python}", "serveur.py", "--port", "{port}", "--sans-navigateur", "--sans-pause", "--sans-maj"],
+  "commande": ["sh", "lancer.sh", "--port", "{port}", "--sans-navigateur", "--sans-pause", "--sans-maj"],
   "delai_arret": 15
 }
 ```
 
 ## Mises à jour
 
-Au démarrage (sauf `--sans-maj`) : `git fetch` (10 s au plus), puis `git pull --ff-only` s'il y a du nouveau, puis redémarrage. Des fichiers suivis modifiés localement sont mis de côté (`git stash`) puis réappliqués. Sous web_launcher, c'est le launcher qui met à jour.
+Au démarrage (sauf `--sans-maj`) : `git fetch` (10 s au plus), puis `git merge --ff-only` (120 s au plus) s'il y a du nouveau ; l'outil sort alors avec le code 75 et `lancer.sh` reprend l'exécutable de la nouvelle version et le relance. Des fichiers suivis modifiés localement sont mis de côté (`git stash`) puis réappliqués. Sous web_launcher, c'est le launcher qui met à jour.
 
 ## Données
 
@@ -95,15 +98,13 @@ Aucune donnée personnelle côté serveur. Le cache des tuiles OSM est dans `cac
 
 ## Bancs d'essai
 
-Chaque banc n'affiche qu'un bilan court, sans réseau :
+Chaque banc n'affiche qu'un bilan court, sans réseau (sur ce Pi sans `cargo`, c'est la CI GitHub qui les lance) :
 
 ```sh
-python3 test/banc-serveur.py   # fichiers servis, Host, API, tuiles, cache
-python3 foudre.py              # LZW, trames websocket, tampon des impacts
-node test/test_calc.js         # score, alertes, vigilance, ensemble, impacts
-python3 appairage.py           # appairage commun
+cargo test --release -p weather   # fichiers servis, Host, API, tuiles, cache, foudre (LZW, tampon), options
+node test/test_calc.js            # score, alertes, vigilance, ensemble, impacts
 ```
 
-`node test/rendu_pages.js http://127.0.0.1:8893` rend chaque page dans un faux DOM avec les vraies réponses d'un serveur lancé à part (`python3 serveur.py --local --sans-maj --sans-navigateur --port 8893`) : erreurs, « undefined », « NaN ».
+L'appairage est testé dans la caisse commune (CI de web_suite).
 
-`python3 foudre.py --direct` écoute le vrai flux Blitzortung pendant 30 s et donne un bilan.
+`node test/rendu_pages.js http://127.0.0.1:8893` rend chaque page dans un faux DOM avec les vraies réponses d'un serveur lancé à part (`sh lancer.sh --local --sans-maj --sans-navigateur --port 8893`) : erreurs, « undefined », « NaN ».

@@ -5,7 +5,7 @@ Statut : version 2 (refonte claire façon iOS d'après les captures de référen
 ## 1. Objectif
 
 Application météo orientée orage, proche des captures de référence (accueil, Chasse orage, Station, Vigilance, Autre).
-Serveur Python + front HTML/CSS/JS, sans framework JS.
+Serveur Rust (porté depuis Python en novembre 2026) + front HTML/CSS/JS, sans framework JS.
 
 ## 2. Contrainte de sources
 
@@ -95,12 +95,12 @@ Grille 15×15 sur environ 150 km autour du lieu (pas d'environ 10 km), mise à j
 
 Tuiles OpenStreetMap, **relayées et cachées par notre serveur** (User-Agent identifiable, attribution « © OpenStreetMap contributors »), assombries côté page par un filtre CSS (invert + hue-rotate) appliqué au seul calque de fond. Esri et CARTO sont écartés.
 
-## 5. Serveur Python
+## 5. Serveur (Rust)
 
 Référence : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md`, appliqué tel quel :
-- Bibliothèque standard Python seule (`http.server`, `ThreadingTCPServer`), `serveur.py` avec les options standard (`--port`, `--local`, `--sans-navigateur`, `--sans-pause`, `--sans-maj`).
-- `appairage.py` copié de `web_suite/lanceur/appairage.py` sans modification (jeton, code d'appairage, HTTPS).
-- Fichiers statiques par liste blanche (regex), aucun CORS ouvert, mise à jour automatique git, intégration web_launcher (entrée `outils.json`), banc `test/banc-serveur.py` et CI.
+- Caisse `rust/weather` (`serveur.rs`, `sources.rs`, `foudre.rs`), lancée par `lancer.sh` / `lancer.bat`, avec les options standard (`--port`, `--local`, `--sans-navigateur`, `--sans-pause`, `--sans-maj`).
+- Jeton, code d'appairage et HTTPS : caisse commune `web_tools_commun` (dépôt web_suite), épinglée sur un commit.
+- Fichiers statiques par liste blanche, aucun CORS ouvert, mise à jour automatique git (code 75), intégration web_launcher (entrée `outils.json`), `cargo test` et CI.
 - Port : 8792 proposé (premier libre de la plage 8790-8899 d'après les règles, à confirmer dans le catalogue du launcher).
 - Rôle : **toutes les sources externes passent par le serveur**, le navigateur ne parle qu'à lui (plus de CORS ni de CSP à ouvrir) :
   - proxy et cache Open-Meteo (point du lieu, LPI `icon_d2` séparé, grille CAPE horaire) ;

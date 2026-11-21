@@ -11,9 +11,6 @@ jobs:
       - name: Serveur et foudre (Rust)
         run: cargo test --release -p weather 2>&1 | tail -30; exit ${PIPESTATUS[0]}
         shell: bash
-      # Cargo.lock n'est pas encore suivi : il est produit ici, une fois, pour être versé au dépôt
-      - uses: actions/upload-artifact@v4
-        with: { name: Cargo.lock, path: Cargo.lock }
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - name: Page — score, alertes, vigilance, ensemble, impacts
