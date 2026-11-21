@@ -1,0 +1,21 @@
+[package]
+name = "weather"
+version = "0.1.0"
+edition = "2021"
+description = "web_weather : météo orientée orage, serveur local qui relaie et garde en cache les sources"
+
+[lib]
+doctest = false
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }
+# Serveur HTTP/HTTPS et appairage : communs aux web tools (dépôt web_suite)
+web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "d40186eebfe11773b92a497c69d25b641264cd0d" }
+# Requêtes sortantes (Open-Meteo, RainViewer, OSM, Météo-France, API Adresse) : rustls et racines webpki-roots
+ureq = "2"
+# Flux de foudre Blitzortung : websocket sortant chiffré par rustls, racines webpki-roots
+tungstenite = { version = "0.24", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
+# Fournisseur cryptographique de rustls (ring, déjà pris par web_tools_commun), posé une fois pour tungstenite
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+# Heure de la grille dans le fuseau du lieu (déjà prise par web_tools_commun)
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

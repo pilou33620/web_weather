@@ -1,23 +1,22 @@
 name: bancs d'essai
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   essais:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
+      # serveur (fichiers servis, Host, API, tuiles, cache, sans réseau), foudre (LZW, tampon), ligne de commande
+      - name: Serveur et foudre (Rust)
+        run: cargo test --release -p weather 2>&1 | tail -30; exit ${PIPESTATUS[0]}
+        shell: bash
+      # Cargo.lock n'est pas encore suivi : il est produit ici, une fois, pour être versé au dépôt
+      - uses: actions/upload-artifact@v4
+        with: { name: Cargo.lock, path: Cargo.lock }
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - name: Serveur — fichiers servis, Host, API, tuiles, cache (sans réseau)
-        run: python test/banc-serveur.py
-      - name: Foudre — LZW, trames websocket, tampon (sans réseau)
-        run: python foudre.py
+        with: { node-version: '22' }
       - name: Page — score, alertes, vigilance, ensemble, impacts
         run: node test/test_calc.js
-      - name: Appairage — code, jeton et cookie partagés
-        run: python appairage.py
-      - name: appairage.py est le même que celui de web_suite
-        run: |
-          git clone --quiet --depth 1 https://github.com/pilou33620/web_suite.git ../web_suite
-          diff <(tr -d '\r' < ../web_suite/lanceur/appairage.py) <(tr -d '\r' < appairage.py)
+      - name: Interface (syntaxe)
+        run: for f in sw.js js/*.js test/*.js; do node --check "$f" || exit 1; done

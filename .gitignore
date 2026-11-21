@@ -4,3 +4,10 @@ __pycache__/
 *.local.json
 journaux/
 cache/
+
+# Rust : compilation et exécutables (compilés ici ou téléchargés)
+/target/
+/bin/
+
+# copies de travail temporaires des agents
+/.claude/worktrees/
