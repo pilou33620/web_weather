@@ -19,8 +19,8 @@ Exceptions : le fond de carte OpenStreetMap (section 4 bis), la foudre en temps 
 Open-Meteo n'a pas d'impacts réels (section 3). Source candidate pour la carte, le compteur et l'alerte d'approche : le flux websocket public de Blitzortung.org.
 - Protocole : se connecter à `wss://ws1.blitzortung.org/` (secours : ws7, ws8), envoyer `{"a":111}`, recevoir des trames JSON compressées en LZW. Non documenté officiellement ; décodage tiré de clients open source (par exemple simonsorcerer23/ft8-raspi).
 - Test du 2026-10-28 (25 s, une connexion) : 87 éclairs reçus (environ 204/min), 0 trame illisible, retard médian 5 s (1,6 à 22,7 s). Champs : `time` (ns), `lat`, `lon`, `alt`, `pol`, `mds`, `mcg`, `sig`, `region`, `status`, `delay`.
-- Client côté serveur : **websocket minimal écrit en bibliothèque standard** (socket + ssl + trames, décodage LZW), avec un banc d'essai sur des trames enregistrées. Pas de dépendance (règle « stdlib seule »).
-- Le flux est **mondial** : le serveur Python doit filtrer par zone (cadre autour de la position). Aucun éclair en France pendant le test (peut-être simplement pas d'orage à ce moment), donc la couverture France n'est pas démontrée.
+- Client côté serveur : **websocket sortant chiffré** (`tungstenite` sur rustls, racines webpki-roots) et décodage LZW dans `rust/weather/src/foudre.rs`, testés par `cargo test` sur des trames compressées.
+- Le flux est **mondial** : le serveur doit filtrer par zone (cadre autour de la position). Aucun éclair en France pendant le test (peut-être simplement pas d'orage à ce moment), donc la couverture France n'est pas démontrée.
 - Conditions (forums, anciennes et contradictoires) : usage non commercial, gratuit, source indiquée (données CC-BY-SA 4.0), données relayées depuis **notre serveur** et pas depuis le navigateur. À confirmer auprès de Blitzortung.
 - Risque : service non garanti, protocole non documenté, il peut changer.
 - Repli possible : EUMETSAT MTG Lightning Imager (satellite, latence sous 15 min, conditions d'accès non confirmées).
@@ -125,7 +125,7 @@ Référence : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md`, appliqué tel quel :
 - Grille CAPE : 15×15, ~150 km, horaire (section 4 ter).
 - Score : heuristique de la maquette, plus le LPI à 20 points quand il existe, plus l'alerte « Foudre probable » (section 4 bis).
 - Interface : français uniquement, °C, km/h, mm, mobile d'abord (le bureau s'adapte simplement).
-- Serveur : `REGLES-NOUVEAU-WEB-TOOL.md`, client websocket Blitzortung en stdlib (section 5).
+- Serveur : `REGLES-NOUVEAU-WEB-TOOL.md`, client websocket Blitzortung en Rust (section 5).
 - Écrans finaux : Accueil (avec brief), Chasse orage (radar, foudre, cellules, grille CAPE), Données (station, graphiques, modèles, fiabilité), Vigilance indicative, Réglages.
 - Vigilance indicative : jaune / orange / rouge à 25 / 50 / 75 % de score d'orage, 70 / 90 / 110 km/h de rafales, 20 / 40 / 80 mm de pluie par jour.
 - Historique : une maquette jetable a existé dans `maquette/` (supprimée en v1, voir l'historique git) (lieu : Pessac 33, HTML/CSS/JS, Leaflet) : météo Open-Meteo et radar RainViewer réels, impacts de foudre **simulés**, fond de carte Esri « Dark Gray » (CARTO sombre testé puis écarté : filigrane « API key required », il exige maintenant une clé). Elle appelle les API directement depuis le navigateur ; le vrai produit passera par le serveur Python.
