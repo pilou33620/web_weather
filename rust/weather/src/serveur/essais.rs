@@ -176,6 +176,18 @@ fn banc_serveur() {
         assert_eq!(get(c).code, attendu, "GET {c}");
     }
     assert_eq!(requete(port, "/.git/config", None, "HEAD").code, 404);
+    // chaque type de la table : 200 avec son Content-Type ; une autre extension : 404
+    for (c, t) in [
+        ("/", "text/html; charset=utf-8"), ("/js/app.js", "text/javascript; charset=utf-8"), ("/css/style.css", "text/css; charset=utf-8"),
+        ("/manifest.json", "application/json"), ("/css/icone.svg", "image/svg+xml"),
+    ] {
+        let r = get(c);
+        assert_eq!(r.code, 200, "{c}");
+        assert!(r.tete.lines().any(|l| l == format!("Content-Type: {t}")), "{c} : {}", r.tete);
+    }
+    for inconnu in ["LICENSE", "a.png", "a.txt", "a.exe", "a.md"] {
+        assert_eq!(type_mime(Path::new(inconnu)), None, "{inconnu}");
+    }
     assert_eq!(requete(port, "/", Some("evil.example:8792"), "GET").code, 403, "Host étranger");
     assert_eq!(requete(port, "/api/radar", Some("evil.example:8792"), "GET").code, 403, "Host étranger sur l'API");
     assert_eq!(requete(port, "/", Some("192.168.1.20:8792"), "GET").code, 200, "Host IP locale");

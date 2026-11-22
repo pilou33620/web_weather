@@ -42,6 +42,7 @@ fn statique_permis(chemin: &str) -> bool {
     ["css", "js", "vendor"].iter().any(|d| premier.eq_ignore_ascii_case(d)) && !reste.is_empty() && reste.iter().all(segment_sur)
 }
 
+/// Les extensions de la page (les tuiles PNG ont leur route) ; une autre est un 404.
 fn type_mime(p: &Path) -> Option<&'static str> {
     Some(match p.extension()?.to_str()?.to_ascii_lowercase().as_str() {
         "html" => "text/html; charset=utf-8",
@@ -49,7 +50,6 @@ fn type_mime(p: &Path) -> Option<&'static str> {
         "css" => "text/css; charset=utf-8",
         "json" => "application/json",
         "svg" => "image/svg+xml",
-        "png" => "image/png",
         _ => return None,
     })
 }
