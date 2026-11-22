@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use web_tools_commun::appairage::{self, Garde};
-use web_tools_commun::serveur::{decoder_url, Reponse, Requete, Serveur};
+use web_tools_commun::serveur::{decoder_chemin, Reponse, Requete, Serveur};
 
 use crate::sources::{self, racine, Erreur};
 
@@ -56,7 +56,7 @@ fn type_mime(p: &Path) -> Option<&'static str> {
 
 /// Un fichier de la page ; rien d'autre.
 fn fichier(chemin: &str) -> Reponse {
-    let chemin = decoder_url(chemin);
+    let chemin = decoder_chemin(chemin);
     let introuvable = || Reponse::texte(404, "File not found");
     if !statique_permis(&chemin) {
         return introuvable();
