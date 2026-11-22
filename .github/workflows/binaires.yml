@@ -1,8 +1,11 @@
 name: exécutables
 
-# Compile l'exécutable de web_weather pour chaque système et le dépose dans la publication « binaires » :
-# weather-<système>.tar.gz (.zip sous Windows) et son empreinte SHA-256, que binaires.sh et
-# binaires.cmd prennent sur un poste sans cargo (Raspberry Pi, PC sans Rust).
+# Compile l'exécutable de web_weather pour chaque système et le dépose dans la publication « binaires »,
+# en deux archives par système (.tar.gz, .zip sous Windows), chacune avec son empreinte SHA-256 :
+# - weather-<système> : l'exécutable seul, que scripts/binaires.sh et scripts/binaires.cmd prennent sur
+#   un clone git sans cargo (Raspberry Pi, PC sans Rust) ;
+# - weather-prod-<système> : la production, sans git ni sources — l'exécutable, les scripts de démarrage
+#   et la page. Ni bancs, ni tests, ni données : une mise à jour ne les touche jamais.
 on:
   push:
     branches: [main]
@@ -51,6 +54,38 @@ jobs:
             tar -czf weather-${{ matrix.nom }}.tar.gz -C bin .
           fi
 
+      - name: Archive de production (exécutable, scripts de démarrage, page)
+        shell: bash
+        run: |
+          P=prod/weather
+          mkdir -p $P
+          cp -r bin scripts index.html sw.js manifest.json css js vendor demarrer_WEB_WEATHER.sh demarrer_WEB_WEATHER.cmd README.md $P/
+          if [ "${{ runner.os }}" = Windows ]; then
+            (cd prod && 7z a ../weather-prod-${{ matrix.nom }}.zip weather)
+          else
+            tar -czf weather-prod-${{ matrix.nom }}.tar.gz -C prod weather
+          fi
+
+      - name: Essai de l'archive de production (dossier vide, démarrage, réponse 200)
+        if: matrix.nom == 'linux-x86_64'
+        shell: bash
+        run: |
+          essai=$(mktemp -d)
+          tar -xzf weather-prod-linux-x86_64.tar.gz -C "$essai"
+          cd "$essai/weather"
+          sh demarrer_WEB_WEATHER.sh --sans-maj --local --sans-navigateur --sans-pause --port 8792 > journal.txt 2>&1 < /dev/null &
+          pid=$!
+          code=000
+          for i in $(seq 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8792/ || true)
+            [ "$code" = 200 ] && break
+            sleep 1
+          done
+          pkill -f "bin/weather " || true
+          kill "$pid" 2>/dev/null || true
+          if [ "$code" != 200 ]; then cat journal.txt; echo "Réponse : $code"; exit 1; fi
+          echo "Archive de production : démarrée, réponse 200."
+
       - name: Publication
         shell: bash
         env:
@@ -59,9 +94,9 @@ jobs:
           # les quatre compilations arrivent ensemble : une seule crée la publication
           gh release view binaires >/dev/null 2>&1 \
             || gh release create binaires --title "Exécutables" \
-                 --notes "Exécutables de web_weather, recompilés à chaque envoi sur main, pris par binaires.sh et binaires.cmd." \
+                 --notes "Exécutables de web_weather, recompilés à chaque envoi sur main. weather-<système> : pris par scripts/binaires.sh et scripts/binaires.cmd. weather-prod-<système> : la production complète (exécutable, scripts de démarrage, page), à décompresser puis lancer par demarrer_WEB_WEATHER." \
             || true
-          for f in weather-${{ matrix.nom }}.*; do
+          for f in weather-${{ matrix.nom }}.* weather-prod-${{ matrix.nom }}.*; do
             (sha256sum "$f" 2>/dev/null || shasum -a 256 "$f") | cut -d" " -f1 > "$f.sha256"
           done
-          gh release upload binaires weather-${{ matrix.nom }}.* --clobber
+          gh release upload binaires weather-${{ matrix.nom }}.* weather-prod-${{ matrix.nom }}.* --clobber

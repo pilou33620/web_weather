@@ -8,3 +8,4 @@ cache/
 
 # copies de travail temporaires des agents
 /.claude/worktrees/
+.hidden

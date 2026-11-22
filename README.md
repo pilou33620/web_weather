@@ -33,18 +33,37 @@ Budget Open-Meteo : environ 5 400 appels par jour pour la grille d'un lieu (225 
 
 ## Installation
 
-Le serveur est un exécutable Rust. Rust n'est pas nécessaire : sans `cargo`, `lancer.sh` télécharge
-l'exécutable du poste (publication « binaires », compilée par la CI à chaque envoi sur `main`,
-vérifiée par son empreinte SHA-256). Avec `cargo`, il est compilé sur place.
+### Le plus simple : l'archive de production (sans git, sans rien installer)
+
+Dans la [publication « binaires »](https://github.com/pilou33620/web_weather/releases/tag/binaires), prendre l'archive du système :
+
+| Système | Archive |
+|---|---|
+| Windows | `weather-prod-windows-x86_64.zip` |
+| Linux x86_64 | `weather-prod-linux-x86_64.tar.gz` |
+| Raspberry Pi (64 bits) | `weather-prod-linux-aarch64.tar.gz` |
+| macOS (Apple) | `weather-prod-macos-aarch64.tar.gz` |
+
+La décompresser où l'on veut (elle donne un dossier `weather/` : le serveur dans `bin/`, la page, les scripts de démarrage), puis double-cliquer sur `demarrer_WEB_WEATHER.cmd` (Windows) ou lancer `./demarrer_WEB_WEATHER.sh`. À chaque démarrage, l'outil compare son archive à la dernière publiée ; si elle a changé, il la télécharge (empreinte SHA-256 vérifiée), recopie ses fichiers par-dessus et redémarre. Le cache (`cache/`), les fichiers `*.local.json` et la clé Météo-France (`~/.web_tools/`) ne sont pas dans l'archive : une mise à jour ne les touche jamais.
+
+### Pour développer : le dépôt git
+
+Le serveur est un exécutable Rust. Rust n'est pas nécessaire : sans `cargo`, `demarrer_WEB_WEATHER`
+télécharge l'exécutable du poste (`scripts/binaires.sh`, `scripts/binaires.cmd` : publication « binaires »,
+compilée par la CI à chaque envoi sur `main`, vérifiée par son empreinte SHA-256). Avec `cargo`, il est
+compilé sur place.
 
 ```sh
 git clone https://github.com/pilou33620/web_weather.git
 cd web_weather
-sh lancer.sh                # Raspberry Pi, Linux, macOS
+sh demarrer_WEB_WEATHER.sh  # Raspberry Pi, Linux, macOS
 ```
 
-Windows : double-clic sur `lancer.bat`. Exécutables publiés : Linux x86_64 et aarch64 (Raspberry Pi),
-macOS aarch64, Windows x86_64.
+Windows : double-clic sur `demarrer_WEB_WEATHER.cmd`. À la racine, seul le lanceur du système en cours
+reste visible : le premier lancement masque l'autre. Sur une erreur, la fenêtre reste ouverte avec la
+raison. `lancer.sh` et `lancer.bat` restent, pour web_launcher : ils relaient vers `demarrer_WEB_WEATHER`
+avec les mêmes options. Exécutables publiés : Linux x86_64 et aarch64 (Raspberry Pi), macOS aarch64,
+Windows x86_64.
 
 ## Options
 
@@ -53,7 +72,7 @@ macOS aarch64, Windows x86_64.
 | `--port N` | port d'écoute (8792 par défaut ; le suivant libre s'il est pris) |
 | `--local` | n'écouter que sur `127.0.0.1` (pas d'appairage) |
 | `--sans-navigateur` | ne pas ouvrir le navigateur |
-| `--sans-pause` | ne pas attendre une touche à l'arrêt |
+| `--sans-pause` | acceptée pour le launcher (sous Windows, `demarrer_WEB_WEATHER.cmd` n'attend une touche que sur une erreur) |
 | `--sans-maj` | ne pas vérifier les mises à jour au démarrage |
 
 ## Vigilance officielle Météo-France
@@ -70,7 +89,7 @@ Sans `--local`, le serveur écoute sur le réseau local et sur Tailscale, et aff
 
 ## web_launcher
 
-Entrée de `web_launcher/outils.json` (l'ancienne, `{python} serveur.py …`, marche aussi : le launcher lance `lancer.sh` quand `serveur.py` n'existe plus) :
+Entrée de `web_launcher/outils.json` (l'ancienne, `{python} serveur.py …`, marche aussi : le launcher lance `lancer.sh`, relais vers `demarrer_WEB_WEATHER.sh`, quand `serveur.py` n'existe plus) :
 
 ```json
 {
@@ -83,14 +102,14 @@ Entrée de `web_launcher/outils.json` (l'ancienne, `{python} serveur.py …`, ma
   "depot": "https://github.com/pilou33620/web_weather.git",
   "dossiers": ["web_weather"],
   "port": 8792,
-  "commande": ["sh", "lancer.sh", "--port", "{port}", "--sans-navigateur", "--sans-pause", "--sans-maj"],
+  "commande": ["sh", "demarrer_WEB_WEATHER.sh", "--port", "{port}", "--sans-navigateur", "--sans-pause", "--sans-maj"],
   "delai_arret": 15
 }
 ```
 
 ## Mises à jour
 
-Au démarrage (sauf `--sans-maj`) : `git fetch` (10 s au plus), puis `git merge --ff-only` (120 s au plus) s'il y a du nouveau ; l'outil sort alors avec le code 75 et `lancer.sh` reprend l'exécutable de la nouvelle version et le relance. Des fichiers suivis modifiés localement sont mis de côté (`git stash`) puis réappliqués. Sous web_launcher, c'est le launcher qui met à jour.
+Au démarrage (sauf `--sans-maj`), un clone git : `git fetch` (10 s au plus), puis `git merge --ff-only` (120 s au plus) s'il y a du nouveau ; une archive de production : comparaison avec la publication « binaires », puis téléchargement vérifié et recopie. L'outil sort alors avec le code 75 et `demarrer_WEB_WEATHER` reprend l'exécutable de la nouvelle version et le relance. Des fichiers suivis modifiés localement sont mis de côté (`git stash`) puis réappliqués. Sous web_launcher, c'est le launcher qui met à jour.
 
 ## Données
 
@@ -107,4 +126,4 @@ node test/test_calc.js            # score, alertes, vigilance, ensemble, impacts
 
 L'appairage est testé dans la caisse commune (CI de web_suite).
 
-`node test/rendu_pages.js http://127.0.0.1:8893` rend chaque page dans un faux DOM avec les vraies réponses d'un serveur lancé à part (`sh lancer.sh --local --sans-maj --sans-navigateur --port 8893`) : erreurs, « undefined », « NaN ».
+`node test/rendu_pages.js http://127.0.0.1:8893` rend chaque page dans un faux DOM avec les vraies réponses d'un serveur lancé à part (`sh demarrer_WEB_WEATHER.sh --local --sans-maj --sans-navigateur --port 8893`) : erreurs, « undefined », « NaN ».

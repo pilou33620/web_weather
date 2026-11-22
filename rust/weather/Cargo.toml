@@ -9,8 +9,8 @@ doctest = false
 
 [dependencies]
 serde_json = { version = "1", features = ["preserve_order"] }
-# Serveur HTTP/HTTPS et appairage : communs aux web tools (dépôt web_suite)
-web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "bc1f42ca77df7ccfc415a93018640058c82e2efe" }
+# Serveur HTTP/HTTPS, appairage et mise à jour sans git (feature production) : communs aux web tools (dépôt web_suite)
+web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "a9d9d90638718302b92ee862bbd415c16bb218fc", features = ["production"] }
 # Requêtes sortantes (Open-Meteo, RainViewer, OSM, Météo-France, API Adresse) : rustls et racines webpki-roots
 ureq = "2"
 # Flux de foudre Blitzortung : websocket sortant chiffré par rustls, racines webpki-roots

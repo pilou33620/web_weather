@@ -98,7 +98,7 @@ Tuiles OpenStreetMap, **relayées et cachées par notre serveur** (User-Agent id
 ## 5. Serveur (Rust)
 
 Référence : `~/Documents/REGLES-NOUVEAU-WEB-TOOL.md`, appliqué tel quel :
-- Caisse `rust/weather` (`serveur.rs`, `sources.rs`, `foudre.rs`), lancée par `lancer.sh` / `lancer.bat`, avec les options standard (`--port`, `--local`, `--sans-navigateur`, `--sans-pause`, `--sans-maj`).
+- Caisse `rust/weather` (`serveur.rs`, `sources.rs`, `foudre.rs`), lancée par `demarrer_WEB_WEATHER.sh` / `demarrer_WEB_WEATHER.cmd`, avec les options standard (`--port`, `--local`, `--sans-navigateur`, `--sans-pause`, `--sans-maj`).
 - Jeton, code d'appairage et HTTPS : caisse commune `web_tools_commun` (dépôt web_suite), épinglée sur un commit.
 - Fichiers statiques par liste blanche, aucun CORS ouvert, mise à jour automatique git (code 75), intégration web_launcher (entrée `outils.json`), `cargo test` et CI.
 - Port : 8792 proposé (premier libre de la plage 8790-8899 d'après les règles, à confirmer dans le catalogue du launcher).

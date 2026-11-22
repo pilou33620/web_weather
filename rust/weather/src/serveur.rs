@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use web_tools_commun::appairage::{self, Garde};
+use web_tools_commun::production;
 use web_tools_commun::serveur::{decoder_chemin, Reponse, Requete, Serveur};
 
 use crate::sources::{self, racine, Erreur};
@@ -249,6 +250,14 @@ fn git(args: &[&str], delai: u64) -> Result<String, String> {
 /// Mise à jour par git (avance rapide seulement). Rend vrai si le code a changé.
 /// Tout échec mène à « on démarre avec la version actuelle ».
 fn mise_a_jour() -> bool {
+    // copie de production (archive sans git ni sources) : mise à jour depuis la publication « binaires »
+    if production::est_copie_prod(racine()) {
+        return production::mettre_a_jour("https://github.com/pilou33620/web_weather", "weather", racine(), &|t| println!("[*] {t}"))
+            .unwrap_or_else(|e| {
+                println!("[X] {e}");
+                false
+            });
+    }
     if git(&["rev-parse", "--is-inside-work-tree"], 5).is_err() {
         return false; // pas de git, ou pas un dépôt : rien d'inquiétant à dire
     }
@@ -315,7 +324,7 @@ pub fn main() {
         println!("{USAGE}\nweb_weather : météo orientée orage.");
         return;
     }
-    // shortcut: la pause sous Windows (double-clic) est faite par lancer.bat, --sans-pause l'évite
+    // la pause sous Windows (double-clic) est faite par demarrer_WEB_WEATHER.cmd, sur une erreur seulement
     let _ = std::env::set_current_dir(racine());
     if !args.sans_maj && mise_a_jour() {
         if std::env::var_os("WEB_WEATHER_RELANCEUR").is_some() {
