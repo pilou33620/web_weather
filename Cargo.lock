@@ -983,6 +983,7 @@ dependencies = [
  "rustls",
  "rustls-pemfile",
  "serde_json",
+ "sha1",
  "sha2",
  "socket2",
 ]
